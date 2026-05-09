@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Pet ID">
+  <defs>
+    <linearGradient id="bg" x1="64" y1="56" x2="454" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#29a38d"/>
+      <stop offset="1" stop-color="#145f68"/>
+    </linearGradient>
+    <linearGradient id="tag" x1="142" y1="128" x2="370" y2="398" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff7df"/>
+      <stop offset="1" stop-color="#f2c56f"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <path d="M161 162c0-36 29-65 65-65h60c36 0 65 29 65 65v32c0 21-10 40-26 52l-48 37c-12 9-29 9-41 0l-48-37c-16-12-27-31-27-52v-32Z" fill="#e8fffb" opacity=".95"/>
+  <path d="M136 281c0-32 26-58 58-58h124c32 0 58 26 58 58v42c0 51-41 92-92 92h-56c-51 0-92-41-92-92v-42Z" fill="url(#tag)"/>
+  <circle cx="206" cy="177" r="16" fill="#145f68"/>
+  <circle cx="306" cy="177" r="16" fill="#145f68"/>
+  <path d="M236 222c8 10 32 10 40 0" fill="none" stroke="#145f68" stroke-width="16" stroke-linecap="round"/>
+  <path d="M256 278c29 0 53 24 53 53s-24 53-53 53-53-24-53-53 24-53 53-53Z" fill="#145f68"/>
+  <path d="M232 333h48M256 309v48" stroke="#fff7df" stroke-width="18" stroke-linecap="round"/>
+</svg>
