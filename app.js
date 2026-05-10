@@ -1,4 +1,5 @@
 const STORAGE_KEY = "pet-id-wallet-state-v1";
+const APP_NAME = "Identificção Pet";
 
 const now = new Date();
 const todayISO = toISODate(now);
@@ -12,6 +13,13 @@ const defaultState = {
   currentView: "home",
   selectedPetId: "pet-luna",
   installDismissed: false,
+  theme: "light",
+  auth: {
+    currentUserEmail: "",
+    authView: "login",
+    trustedDevice: true
+  },
+  users: [],
   owner: {
     name: "Gabriela Souza",
     cpf: "123.456.789-00",
@@ -208,7 +216,12 @@ document.addEventListener("submit", (event) => {
   const form = event.target.closest("form[data-form]");
   if (!form) return;
   event.preventDefault();
-  handleForm(form);
+  try {
+    handleForm(form);
+  } catch (error) {
+    console.error(error);
+    notify("Não foi possível salvar. Recarregue o app e tente novamente.");
+  }
 });
 
 document.addEventListener("click", (event) => {
@@ -220,6 +233,8 @@ document.addEventListener("click", (event) => {
   const view = action.dataset.view;
 
   if (name === "view") navigate(view);
+  if (name === "auth-view") setAuthView(action.dataset.mode);
+  if (name === "logout") logout();
   if (name === "drawer") openDrawer();
   if (name === "close-modal") closeModal();
   if (name === "new-pet") openPetModal();
@@ -234,6 +249,8 @@ document.addEventListener("click", (event) => {
   if (name === "save-travel") openTravelModal();
   if (name === "new-document") openDocumentModal(id || state.selectedPetId);
   if (name === "install") installApp();
+  if (name === "install-help") openInstallHelp();
+  if (name === "toggle-theme") toggleTheme();
   if (name === "dismiss-install") {
     state.installDismissed = true;
     saveState();
@@ -294,6 +311,8 @@ function loadState() {
     return {
       ...structuredClone(defaultState),
       ...parsed,
+      auth: { ...defaultState.auth, ...(parsed.auth || {}) },
+      users: Array.isArray(parsed.users) ? parsed.users : [],
       owner: { ...defaultState.owner, ...(parsed.owner || {}) },
       travel: {
         ...defaultState.travel,
@@ -311,7 +330,87 @@ function saveState() {
 }
 
 function render() {
-  app.innerHTML = layout(screenTemplate());
+  applyTheme();
+  app.innerHTML = isAuthenticated() ? layout(screenTemplate()) : authView();
+}
+
+function applyTheme() {
+  document.documentElement.dataset.theme = state.theme === "dark" ? "dark" : "light";
+  document
+    .querySelector("meta[name='theme-color']")
+    ?.setAttribute("content", state.theme === "dark" ? "#0d1f20" : "#2ac9a7");
+}
+
+function isAuthenticated() {
+  return Boolean(state.auth?.currentUserEmail && currentUser());
+}
+
+function currentUser() {
+  const email = normalizeEmail(state.auth?.currentUserEmail || "");
+  return (state.users || []).find((user) => normalizeEmail(user.email) === email) || null;
+}
+
+function setAuthView(mode) {
+  state.auth = { ...state.auth, authView: mode === "register" ? "register" : "login" };
+  saveState();
+  render();
+}
+
+function authView() {
+  const mode = state.auth?.authView === "register" ? "register" : "login";
+  const isRegister = mode === "register";
+
+  return `
+    <main class="auth-screen">
+      <section class="auth-hero">
+        <div class="auth-brand">
+          <span class="auth-logo"><img src="${logoSrc()}" alt="${APP_NAME}" /></span>
+          <div>
+            <strong>${APP_NAME}</strong>
+            <span>Carteira digital para pets</span>
+          </div>
+        </div>
+        <div class="auth-copy">
+          <span class="eyebrow">Identificação segura</span>
+          <h1>${isRegister ? "Crie sua carteira pet" : "Bem-vindo de volta"}</h1>
+          <p>Tenha dados do pet, tutor, vacinas, viagem e veterinárias próximas em um app instalável no celular.</p>
+        </div>
+      </section>
+
+      <section class="auth-panel" aria-label="${isRegister ? "Criar conta" : "Entrar"}">
+        <div class="auth-tabs">
+          <button class="${!isRegister ? "active" : ""}" type="button" data-action="auth-view" data-mode="login">Entrar</button>
+          <button class="${isRegister ? "active" : ""}" type="button" data-action="auth-view" data-mode="register">Cadastrar</button>
+        </div>
+        ${isRegister ? registerForm() : loginForm()}
+      </section>
+    </main>
+  `;
+}
+
+function loginForm() {
+  return `
+    <form class="form auth-form" data-form="login">
+      ${field("E-mail", "email", "", "email", true)}
+      ${field("Senha", "password", "", "password", true)}
+      <button class="primary-button" type="submit">Entrar</button>
+      <p class="muted small">Este aparelho será lembrado após o login e abrirá direto no início.</p>
+    </form>
+  `;
+}
+
+function registerForm() {
+  return `
+    <form class="form auth-form" data-form="register">
+      ${field("Nome completo", "name", "", "text", true)}
+      ${field("E-mail", "email", "", "email", true)}
+      ${field("Telefone", "phone", "", "tel", true)}
+      ${field("Senha", "password", "", "password", true)}
+      ${field("Confirmar senha", "confirmPassword", "", "password", true)}
+      <button class="primary-button" type="submit">Criar conta</button>
+      <p class="muted small">Depois do cadastro, a carteira começa vazia para você adicionar seus pets.</p>
+    </form>
+  `;
 }
 
 function layout(content) {
@@ -321,13 +420,14 @@ function layout(content) {
       <header class="topbar">
         <button class="icon-button" type="button" data-action="drawer" aria-label="Abrir menu">☰</button>
         <div class="brand">
-          <span class="brand-mark"><img src="./pet-icon.svg" alt="" /></span>
+          <span class="brand-mark"><img src="${logoSrc()}" alt="" /></span>
           <span>
-            <span class="brand-title">Pet ID</span>
+            <span class="brand-title">${APP_NAME}</span>
             <span class="brand-subtitle">${escapeHTML(state.owner.city)}, ${escapeHTML(state.owner.state)} · ${state.pets.length} pet${state.pets.length === 1 ? "" : "s"}</span>
           </span>
         </div>
         <div class="top-actions">
+          <button class="icon-button" type="button" data-action="toggle-theme" aria-label="Alternar tema">${themeIcon()}</button>
           <button class="secondary-button desktop-only" type="button" data-action="new-pet">＋ Pet</button>
           <button class="avatar-button" type="button" data-action="edit-owner" aria-label="Editar tutor">${initials(state.owner.name)}</button>
         </div>
@@ -364,6 +464,22 @@ function navigate(view) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+function toggleTheme() {
+  state.theme = state.theme === "dark" ? "light" : "dark";
+  saveState();
+  closeModal();
+  render();
+  notify(state.theme === "dark" ? "Tema escuro ativado." : "Tema claro ativado.");
+}
+
+function themeIcon() {
+  return state.theme === "dark" ? "☀" : "☾";
+}
+
+function logoSrc() {
+  return state.theme === "dark" ? "./pet-icon-dark.svg" : "./pet-icon.svg";
+}
+
 function homeView() {
   const selectedPet = getSelectedPet();
   const upcoming = getVaccines().filter((vaccine) => ["late", "soon"].includes(vaccineStatus(vaccine).type));
@@ -372,7 +488,7 @@ function homeView() {
     <div class="hero">
       <div class="hero-copy">
         <span class="eyebrow">Carteira digital completa</span>
-        <h1>Pet ID</h1>
+        <h1>${APP_NAME}</h1>
         <p>Identificação, tutor, vacinas, documentos de viagem e clínicas próximas em um app instalável no celular.</p>
         <div class="button-row">
           <button class="primary-button" type="button" data-action="new-pet">＋ Cadastrar pet</button>
@@ -466,6 +582,7 @@ function walletView() {
 
   const petVaccines = getVaccines(pet.id);
   const petDocs = state.documents.filter((doc) => doc.petId === pet.id);
+  return walletDocumentView(pet, petVaccines, petDocs);
 
   return `
     <div class="page-head">
@@ -550,6 +667,141 @@ function walletView() {
         </div>
       </aside>
     </section>
+  `;
+}
+
+function walletDocumentView(pet, petVaccines, petDocs) {
+  const nextVaccine = petVaccines[0];
+  const status = nextVaccine ? vaccineStatus(nextVaccine) : { type: "warn", label: "Sem vacinas" };
+  const documentNumber = pet.registry || `PET-${pet.id.slice(-6).toUpperCase()}`;
+  const issuedAt = formatDate(todayISO);
+
+  return `
+    <div class="page-head">
+      <span class="eyebrow">Documento digital</span>
+      <h1>Carteira do ${escapeHTML(pet.name)}</h1>
+      <p class="muted">Layout inspirado em documentos digitais, com identificação do pet, tutor, saúde e QR visual.</p>
+    </div>
+
+    <section class="digital-wallet" aria-label="Documento digital do pet">
+      <article class="license-card license-front">
+        <img class="doc-watermark" src="${logoSrc()}" alt="" />
+        <div class="doc-topline">
+          <div>
+            <span class="doc-country">BRASIL</span>
+            <strong>${APP_NAME}</strong>
+            <span>Documento Digital do Pet</span>
+          </div>
+          <img class="doc-logo" src="${logoSrc()}" alt="${APP_NAME}" />
+        </div>
+
+        <div class="doc-main">
+          <div class="doc-photo">${petAvatar(pet)}</div>
+          <div class="doc-name">
+            <span>Nome do pet</span>
+            <h2>${escapeHTML(pet.name)}</h2>
+            <div class="inline-meta">
+              <span class="pill">${escapeHTML(pet.species)}</span>
+              <span class="pill">${escapeHTML(pet.breed || "Raça não informada")}</span>
+              <span class="pill ${status.type}">${status.label}</span>
+            </div>
+          </div>
+          <div class="doc-qr">
+            ${qrTemplate(`${documentNumber}-${pet.microchip}-${state.owner.phone}`)}
+            <span>QR PET</span>
+          </div>
+        </div>
+
+        <div class="doc-grid">
+          ${walletData("Registro", documentNumber)}
+          ${walletData("Microchip", pet.microchip)}
+          ${walletData("Nascimento", formatDate(pet.birthDate))}
+          ${walletData("Sexo", pet.sex)}
+          ${walletData("Peso", pet.weight ? `${pet.weight} kg` : "")}
+          ${walletData("Cor", pet.color)}
+        </div>
+
+        <div class="doc-footer">
+          <span>Emitido em ${issuedAt}</span>
+          <span>Validação digital local</span>
+        </div>
+      </article>
+
+      <article class="license-card license-back">
+        <img class="doc-watermark" src="${logoSrc()}" alt="" />
+        <div class="doc-topline">
+          <div>
+            <span class="doc-country">Tutor responsável</span>
+            <strong>${escapeHTML(state.owner.name)}</strong>
+            <span>${escapeHTML(state.owner.phone)}</span>
+          </div>
+          <span class="doc-chip">ID</span>
+        </div>
+
+        <div class="doc-grid owner-doc-grid">
+          ${walletData("CPF", state.owner.cpf)}
+          ${walletData("E-mail", state.owner.email)}
+          ${walletData("Endereço", ownerAddress(), true)}
+          ${walletData("Emergência", `${state.owner.emergencyName} - ${state.owner.emergencyPhone}`, true)}
+          ${walletData("Temperamento", pet.temperament, true)}
+          ${walletData("Alergias", pet.allergies, true)}
+        </div>
+
+        <div class="doc-signature">
+          <span>${escapeHTML(state.owner.name)}</span>
+          <strong>Assinatura do tutor</strong>
+        </div>
+      </article>
+    </section>
+
+    <section class="section">
+      <div class="button-row">
+        <button class="primary-button" type="button" data-action="edit-pet" data-id="${pet.id}">Editar dados</button>
+        <button class="secondary-button" type="button" data-action="new-vaccine" data-id="${pet.id}">＋ Vacina</button>
+        <button class="secondary-button" type="button" data-action="new-document" data-id="${pet.id}">＋ Documento</button>
+      </div>
+    </section>
+
+    <section class="section screen-grid">
+      <div class="grid">
+        <div class="card">
+          <div class="section-title">
+            <div>
+              <h2>Dados completos</h2>
+              <p class="muted small">Informações usadas no documento digital.</p>
+            </div>
+          </div>
+          <div class="detail-list">
+            ${detailRow("Espécie", pet.species)}
+            ${detailRow("Raça", pet.breed)}
+            ${detailRow("Sexo", pet.sex)}
+            ${detailRow("Nascimento", formatDate(pet.birthDate))}
+            ${detailRow("Peso", pet.weight ? `${pet.weight} kg` : "")}
+            ${detailRow("Microchip", pet.microchip)}
+            ${detailRow("Observações", pet.notes)}
+          </div>
+        </div>
+        <div class="card">
+          <h2>Vacinas</h2>
+          ${petVaccines.length ? `<div class="timeline" style="margin-top: 12px;">${petVaccines.map(vaccineItem).join("")}</div>` : emptyState("✚", "Sem vacinas", "Adicione o primeiro registro de vacinação.")}
+        </div>
+      </div>
+      <aside class="grid">
+        <div class="card">
+          <h2>Documentos</h2>
+          ${petDocs.length ? `<div class="grid" style="margin-top: 12px;">${petDocs.map(documentItem).join("")}</div>` : emptyState("□", "Sem documentos", "Registre atestados e exames importantes.")}
+        </div>
+      </aside>
+    </section>
+  `;
+}
+
+function walletData(label, value, wide = false) {
+  return `
+    <div class="doc-data ${wide ? "wide" : ""}">
+      <span>${label}</span>
+      <strong>${escapeHTML(value || "Não informado")}</strong>
+    </div>
   `;
 }
 
@@ -749,8 +1001,10 @@ function settingsView() {
           <h2>Dados do aplicativo</h2>
           <p class="muted" style="margin-top: 8px;">Tudo fica salvo neste navegador pelo armazenamento local do dispositivo.</p>
           <div class="button-row" style="margin-top: 14px;">
+            <button class="secondary-button" type="button" data-action="toggle-theme">${themeIcon()} Tema ${state.theme === "dark" ? "claro" : "escuro"}</button>
             <button class="secondary-button" type="button" data-action="export">Exportar</button>
             <button class="secondary-button" type="button" data-action="import">Importar</button>
+            <button class="secondary-button" type="button" data-action="logout">Sair</button>
             <button class="danger-button" type="button" data-action="reset-demo">Restaurar demo</button>
           </div>
         </div>
@@ -912,19 +1166,53 @@ function installBanner(force = false) {
   const canInstall = Boolean(deferredInstallPrompt) && !state.installDismissed;
   const showIos = isIos() && !isStandalone() && !state.installDismissed;
   if (!force && !canInstall && !showIos) return "";
+  const installLabel = canInstall ? "Instalar" : "Como instalar";
+  const installAction = canInstall ? "install" : "install-help";
 
   return `
     <div class="install-banner ${canInstall || showIos || force ? "available" : ""}">
       <div>
         <strong>Instalar no celular</strong>
-        <p class="small" style="margin-top: 2px;">Android e iOS como aplicativo PWA.</p>
+        <p class="small" style="margin-top: 2px;">${installHint()}</p>
       </div>
       <div class="button-row">
-        ${canInstall ? `<button class="primary-button" type="button" data-action="install">Instalar</button>` : ""}
+        <button class="primary-button" type="button" data-action="${installAction}">${installLabel}</button>
         <button class="ghost-button" type="button" data-action="dismiss-install" aria-label="Ocultar instalação">×</button>
       </div>
     </div>
   `;
+}
+
+function installHint() {
+  if (isStandalone()) return "O app já está aberto em modo instalado.";
+  if (window.isSecureContext) return "Pronto para instalação quando o navegador liberar o botão.";
+  return "Para instalar como app, use HTTPS ou localhost.";
+}
+
+function openInstallHelp() {
+  const localUrl = "http://127.0.0.1:5240/";
+  openModal(`
+    <div class="modal-head">
+      <h2>Instalar como aplicativo</h2>
+      <button class="icon-button" type="button" data-action="close-modal" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="grid">
+        <div class="card">
+          <h3>Android</h3>
+          <p class="muted small" style="margin-top: 6px;">No Chrome, abra o app em HTTPS ou localhost. Quando o navegador reconhecer a PWA, toque em Instalar app. Para teste sem hospedar, use cabo USB com ADB e acesse ${localUrl}</p>
+        </div>
+        <div class="card">
+          <h3>iPhone</h3>
+          <p class="muted small" style="margin-top: 6px;">No Safari, abra o app e use Compartilhar, depois Adicionar à Tela de Início. Para recursos completos de PWA, o iPhone normalmente exige HTTPS.</p>
+        </div>
+        <div class="card">
+          <h3>Teste por Wi-Fi</h3>
+          <p class="muted small" style="margin-top: 6px;">Abrir pelo IP do computador serve para testar layout e navegação. Porém, em http://IP:porta o navegador pode criar só atalho, porque não é uma origem segura.</p>
+        </div>
+      </div>
+    </div>
+  `);
 }
 
 function openPetModal(id = "") {
@@ -1081,9 +1369,9 @@ function openDrawer() {
     <aside class="drawer">
       <div class="drawer-head">
         <div class="brand">
-          <span class="brand-mark"><img src="./pet-icon.svg" alt="" /></span>
+          <span class="brand-mark"><img src="${logoSrc()}" alt="" /></span>
           <span>
-            <span class="brand-title">Pet ID</span>
+            <span class="brand-title">${APP_NAME}</span>
             <span class="brand-subtitle">Carteira digital</span>
           </span>
         </div>
@@ -1097,6 +1385,12 @@ function openDrawer() {
         </div>
       </div>
       <nav class="drawer-nav" aria-label="Menu lateral">
+        <button type="button" data-action="toggle-theme">
+          <span>${themeIcon()}</span> ${state.theme === "dark" ? "Tema claro" : "Tema escuro"}
+        </button>
+        <button type="button" data-action="logout">
+          <span>↩</span> Sair da conta
+        </button>
         ${[...views, { id: "settings", label: "Configurações", icon: "⚙" }].map((view) => `
           <button class="${state.currentView === view.id ? "active" : ""}" type="button" data-action="view" data-view="${view.id}">
             <span>${view.icon}</span> ${view.label}
@@ -1129,14 +1423,155 @@ function closeModal() {
   document.querySelectorAll("[data-modal]").forEach((modal) => modal.remove());
 }
 
+function login(data) {
+  const email = normalizeEmail(data.email);
+  const user = (state.users || []).find((item) => normalizeEmail(item.email) === email);
+
+  if (!user || user.password !== data.password) {
+    notify("E-mail ou senha inválidos.");
+    return;
+  }
+
+  state.auth = {
+    ...state.auth,
+    currentUserEmail: user.email,
+    authView: "login",
+    trustedDevice: true
+  };
+
+  if (!state.owner.email) {
+    state.owner = { ...state.owner, name: user.name, email: user.email, phone: user.phone || "" };
+  }
+
+  state.currentView = "home";
+  saveState();
+  notify("Login realizado.");
+  render();
+}
+
+function register(data) {
+  const email = normalizeEmail(data.email);
+  const password = String(data.password || "");
+  const confirmPassword = String(data.confirmPassword || "");
+
+  if (!email || !data.name || !data.phone || !password) {
+    notify("Preencha todos os campos.");
+    return;
+  }
+
+  if (password.length < 4) {
+    notify("Use uma senha com pelo menos 4 caracteres.");
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    notify("As senhas não conferem.");
+    return;
+  }
+
+  if ((state.users || []).some((user) => normalizeEmail(user.email) === email)) {
+    notify("Este e-mail já está cadastrado.");
+    setAuthView("login");
+    return;
+  }
+
+  const user = {
+    id: createId("user"),
+    name: String(data.name).trim(),
+    email,
+    phone: String(data.phone || "").trim(),
+    password,
+    createdAt: new Date().toISOString()
+  };
+
+  const previousTheme = state.theme;
+  const previousInstallDismissed = state.installDismissed;
+  const previousUsers = Array.isArray(state.users) ? state.users : [];
+
+  state = {
+    ...structuredClone(defaultState),
+    theme: previousTheme,
+    installDismissed: previousInstallDismissed,
+    users: [...previousUsers, user],
+    auth: {
+      currentUserEmail: user.email,
+      authView: "login",
+      trustedDevice: true
+    },
+    currentView: "home",
+    selectedPetId: "",
+    owner: blankOwner(user),
+    pets: [],
+    vaccines: [],
+    documents: [],
+    travel: blankTravel()
+  };
+
+  saveState();
+  notify("Conta criada. Pode cadastrar seu primeiro pet.");
+  render();
+}
+
+function logout() {
+  state.auth = { ...state.auth, currentUserEmail: "", authView: "login" };
+  saveState();
+  closeModal();
+  notify("Sessão encerrada.");
+  render();
+}
+
+function blankOwner(user = {}) {
+  return {
+    name: user.name || "",
+    cpf: "",
+    phone: user.phone || "",
+    email: user.email || "",
+    address: "",
+    neighborhood: "",
+    city: "",
+    state: "",
+    emergencyName: "",
+    emergencyPhone: ""
+  };
+}
+
+function blankTravel() {
+  return {
+    destination: "",
+    date: "",
+    transport: "Carro",
+    selectedPetId: "",
+    notes: "",
+    items: {
+      vaccine: false,
+      certificate: false,
+      carrier: false,
+      food: false,
+      collar: false,
+      destinationRules: false,
+      medicine: false
+    }
+  };
+}
+
 function handleForm(form) {
   const data = Object.fromEntries(new FormData(form).entries());
   const type = form.dataset.form;
 
+  if (type === "login") {
+    login(data);
+    return;
+  }
+
+  if (type === "register") {
+    register(data);
+    return;
+  }
+
   if (type === "pet") {
     const pet = {
       ...data,
-      id: data.id || `pet-${crypto.randomUUID()}`,
+      id: data.id || createId("pet"),
       weight: data.weight || "",
       avatarColor: data.avatarColor || "#17716b"
     };
@@ -1153,13 +1588,13 @@ function handleForm(form) {
   }
 
   if (type === "vaccine") {
-    state.vaccines.push({ ...data, id: `vac-${crypto.randomUUID()}` });
+    state.vaccines.push({ ...data, id: createId("vac") });
     state.selectedPetId = data.petId;
     notify("Vacina registrada.");
   }
 
   if (type === "document") {
-    state.documents.push({ ...data, id: `doc-${crypto.randomUUID()}` });
+    state.documents.push({ ...data, id: createId("doc") });
     state.selectedPetId = data.petId;
     notify("Documento salvo.");
   }
@@ -1192,7 +1627,15 @@ function deletePet(id) {
 
 function resetDemo() {
   if (!confirm("Restaurar os dados de demonstração?")) return;
-  state = structuredClone(defaultState);
+  const previousAuth = { ...state.auth };
+  const previousUsers = Array.isArray(state.users) ? state.users : [];
+  const previousTheme = state.theme;
+  state = {
+    ...structuredClone(defaultState),
+    auth: previousAuth,
+    users: previousUsers,
+    theme: previousTheme
+  };
   saveState();
   notify("Demonstração restaurada.");
   render();
@@ -1203,7 +1646,7 @@ function exportData() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `pet-id-backup-${todayISO}.json`;
+  link.download = `identificcao-pet-backup-${todayISO}.json`;
   document.body.append(link);
   link.click();
   link.remove();
@@ -1236,7 +1679,7 @@ function importData() {
 
 async function installApp() {
   if (!deferredInstallPrompt) {
-    notify("Use o menu do navegador para adicionar à tela inicial.");
+    openInstallHelp();
     return;
   }
   deferredInstallPrompt.prompt();
@@ -1382,6 +1825,18 @@ function escapeHTML(value = "") {
 
 function onlyDigits(value = "") {
   return String(value).replace(/\D/g, "");
+}
+
+function normalizeEmail(value = "") {
+  return String(value).trim().toLowerCase();
+}
+
+function createId(prefix = "id") {
+  const randomPart =
+    globalThis.crypto && typeof globalThis.crypto.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}-${randomPart}`;
 }
 
 function isIos() {

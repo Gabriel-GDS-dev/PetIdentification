@@ -1,20 +1,40 @@
 {
-  "name": "Pet ID - Carteira Digital",
-  "short_name": "Pet ID",
+  "name": "Identificção Pet - Carteira Digital",
+  "short_name": "Identificção Pet",
   "description": "Carteira digital completa para pets, tutores, vacinas, viagens e veterinárias próximas.",
+  "id": "./",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f6fbfa",
-  "theme_color": "#17716b",
+  "background_color": "#2ac9a7",
+  "theme_color": "#2ac9a7",
   "categories": ["health", "lifestyle", "utilities"],
+  "prefer_related_applications": false,
   "icons": [
+    {
+      "src": "./pet-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./pet-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./pet-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
     {
       "src": "./pet-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ],
   "screenshots": [
