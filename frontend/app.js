@@ -1,5 +1,7 @@
 const STORAGE_KEY = "pet-id-wallet-state-v1";
-const APP_NAME = "Identificção Pet";
+const APP_NAME = "Identificação Pet";
+const API_BASE = window.location.origin;
+const SYNC_DEBOUNCE_MS = 900;
 
 const now = new Date();
 const todayISO = toISODate(now);
@@ -17,7 +19,14 @@ const defaultState = {
   auth: {
     currentUserEmail: "",
     authView: "login",
-    trustedDevice: true
+    trustedDevice: true,
+    apiToken: ""
+  },
+  sync: {
+    status: "local",
+    lastSyncedAt: "",
+    lastError: "",
+    apiOnline: false
   },
   users: [],
   owner: {
@@ -29,6 +38,7 @@ const defaultState = {
     neighborhood: "Centro",
     city: "São Paulo",
     state: "SP",
+    zipCode: "01000-000",
     emergencyName: "Marcos Souza",
     emergencyPhone: "(11) 97777-1010"
   },
@@ -194,6 +204,8 @@ let deferredInstallPrompt = null;
 let petFilter = "all";
 let vaccineFilter = "all";
 let searchTerm = "";
+let syncTimer = null;
+let syncing = false;
 
 const app = document.querySelector("#app");
 const toast = document.querySelector("#toast");
@@ -212,12 +224,15 @@ window.addEventListener("appinstalled", () => {
   render();
 });
 
-document.addEventListener("submit", (event) => {
+window.addEventListener("online", () => syncWithServer("online"));
+window.addEventListener("offline", () => markSyncOffline("Sem conexão com a internet."));
+
+document.addEventListener("submit", async (event) => {
   const form = event.target.closest("form[data-form]");
   if (!form) return;
   event.preventDefault();
   try {
-    handleForm(form);
+    await handleForm(form);
   } catch (error) {
     console.error(error);
     notify("Não foi possível salvar. Recarregue o app e tente novamente.");
@@ -240,6 +255,10 @@ document.addEventListener("click", (event) => {
   if (name === "new-pet") openPetModal();
   if (name === "edit-pet") openPetModal(id);
   if (name === "delete-pet") deletePet(id);
+  if (name === "sign-pet") openSignatureModal(id || state.selectedPetId);
+  if (name === "clear-signature") clearSignaturePad();
+  if (name === "save-signature") saveSignature(id || state.selectedPetId);
+  if (name === "download-wallet-pdf") downloadWalletPdf(id || state.selectedPetId);
   if (name === "pet-wallet") {
     state.selectedPetId = id;
     navigate("wallet");
@@ -258,6 +277,7 @@ document.addEventListener("click", (event) => {
   }
   if (name === "export") exportData();
   if (name === "import") importData();
+  if (name === "sync-now") syncWithServer("manual");
   if (name === "reset-demo") resetDemo();
   if (name === "maps") openMaps(action.dataset.query);
 });
@@ -275,7 +295,11 @@ document.addEventListener("input", (event) => {
   }
 });
 
-document.addEventListener("change", (event) => {
+document.addEventListener("change", async (event) => {
+  if (event.target.matches("[data-pet-photo]")) {
+    await handlePetPhotoInput(event.target);
+  }
+
   if (event.target.matches("[data-filter='pet']")) {
     petFilter = event.target.value;
     renderPets();
@@ -301,32 +325,224 @@ function init() {
     navigator.serviceWorker.register("./service-worker.js").catch(() => {});
   }
   render();
+  syncWithServer("startup", { silent: true });
 }
 
 function loadState() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return structuredClone(defaultState);
-    const parsed = JSON.parse(stored);
-    return {
-      ...structuredClone(defaultState),
-      ...parsed,
-      auth: { ...defaultState.auth, ...(parsed.auth || {}) },
-      users: Array.isArray(parsed.users) ? parsed.users : [],
-      owner: { ...defaultState.owner, ...(parsed.owner || {}) },
-      travel: {
-        ...defaultState.travel,
-        ...(parsed.travel || {}),
-        items: { ...defaultState.travel.items, ...((parsed.travel || {}).items || {}) }
-      }
-    };
+    return mergeState(JSON.parse(stored));
   } catch {
     return structuredClone(defaultState);
   }
 }
 
-function saveState() {
+function mergeState(partial = {}) {
+  return {
+    ...structuredClone(defaultState),
+    ...partial,
+    auth: { ...defaultState.auth, ...(partial.auth || {}) },
+    sync: { ...defaultState.sync, ...(partial.sync || {}) },
+    users: Array.isArray(partial.users) ? partial.users : [],
+    owner: { ...defaultState.owner, ...(partial.owner || {}) },
+    travel: {
+      ...defaultState.travel,
+      ...(partial.travel || {}),
+      items: { ...defaultState.travel.items, ...((partial.travel || {}).items || {}) }
+    }
+  };
+}
+
+function saveState(options = {}) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (options.sync !== false && isAuthenticated()) scheduleSync();
+}
+
+function scheduleSync() {
+  if (!state.auth?.apiToken || syncing) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => syncWithServer("auto", { silent: true }), SYNC_DEBOUNCE_MS);
+}
+
+async function syncWithServer(reason = "auto", options = {}) {
+  if (!isAuthenticated()) return;
+
+  if (!state.auth?.apiToken) {
+    state.sync = {
+      ...defaultState.sync,
+      status: "local",
+      lastError: "Entre novamente pela API para conectar esta conta ao banco.",
+      apiOnline: false
+    };
+    saveState({ sync: false });
+    return;
+  }
+
+  if (syncing) return;
+  syncing = true;
+  clearTimeout(syncTimer);
+
+  const previousSync = { ...defaultState.sync, ...(state.sync || {}) };
+  state.sync = { ...previousSync, status: "syncing", lastError: "", apiOnline: true };
+  saveState({ sync: false });
+  if (!options.silent && reason === "manual") render();
+
+  try {
+    const payload = await apiRequest("/api/sync", {
+      method: "POST",
+      auth: true,
+      body: {
+        state: stateForServer(),
+        clientUpdatedAt: new Date().toISOString()
+      }
+    });
+
+    applyServerSession(payload, { keepToken: true });
+    state.sync = {
+      status: "synced",
+      lastSyncedAt: payload.syncedAt || new Date().toISOString(),
+      lastError: "",
+      apiOnline: true
+    };
+    saveState({ sync: false });
+    if (!options.silent && reason === "manual") notify("Dados sincronizados com o PostgreSQL.");
+    render();
+  } catch (error) {
+    state.sync = {
+      ...previousSync,
+      status: "error",
+      lastError: error.message || "Banco indisponível.",
+      apiOnline: false
+    };
+    saveState({ sync: false });
+    if (!options.silent && reason === "manual") notify("Banco indisponível. Dados seguem salvos no celular.");
+    if (!options.silent) render();
+  } finally {
+    syncing = false;
+  }
+}
+
+function markSyncOffline(message) {
+  state.sync = {
+    ...defaultState.sync,
+    ...(state.sync || {}),
+    status: "error",
+    lastError: message,
+    apiOnline: false
+  };
+  saveState({ sync: false });
+  render();
+}
+
+async function apiRequest(path, options = {}) {
+  const headers = { "Content-Type": "application/json" };
+  if (options.auth && state.auth?.apiToken) headers.Authorization = `Bearer ${state.auth.apiToken}`;
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: options.method || "GET",
+    headers,
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    const error = new Error(payload?.error || "API indisponível.");
+    error.status = response.status;
+    throw error;
+  }
+
+  return payload;
+}
+
+function applyServerSession(payload, options = {}) {
+  const apiUser = payload?.user;
+  if (!apiUser?.email) return;
+
+  const previousUsers = Array.isArray(state.users) ? state.users : [];
+  const preferences = {
+    theme: state.theme,
+    installDismissed: state.installDismissed
+  };
+  const token = options.keepToken ? state.auth?.apiToken : payload.token || state.auth?.apiToken || "";
+  const remoteState = payload.state ? mergeState(payload.state) : blankStateForUser(apiUser, options.password || "");
+  const knownUsers = [...previousUsers, ...(Array.isArray(remoteState.users) ? remoteState.users : [])];
+
+  state = {
+    ...remoteState,
+    theme: preferences.theme,
+    installDismissed: preferences.installDismissed,
+    auth: {
+      ...defaultState.auth,
+      ...(remoteState.auth || {}),
+      currentUserEmail: apiUser.email,
+      authView: "login",
+      trustedDevice: true,
+      apiToken: token
+    },
+    users: upsertLocalUser(knownUsers, apiUser, options.password),
+    sync: {
+      status: "synced",
+      lastSyncedAt: payload.syncedAt || new Date().toISOString(),
+      lastError: "",
+      apiOnline: true
+    }
+  };
+}
+
+function blankStateForUser(user, password = "") {
+  return {
+    ...structuredClone(defaultState),
+    currentView: "home",
+    selectedPetId: "",
+    owner: blankOwner(user),
+    pets: [],
+    vaccines: [],
+    documents: [],
+    travel: blankTravel(),
+    users: upsertLocalUser([], user, password),
+    auth: {
+      ...defaultState.auth,
+      currentUserEmail: user.email,
+      authView: "login",
+      trustedDevice: true
+    }
+  };
+}
+
+function upsertLocalUser(users, user, password = "") {
+  const email = normalizeEmail(user.email);
+  const cleanUsers = Array.isArray(users) ? users.filter((item) => normalizeEmail(item.email) !== email) : [];
+  const previous = Array.isArray(users) ? users.find((item) => normalizeEmail(item.email) === email) : null;
+
+  return [
+    ...cleanUsers,
+    {
+      id: user.id || previous?.id || createId("user"),
+      name: user.name || previous?.name || "",
+      email,
+      phone: user.phone || previous?.phone || "",
+      password: password || previous?.password || "",
+      createdAt: user.createdAt || user.created_at || previous?.createdAt || new Date().toISOString()
+    }
+  ];
+}
+
+function stateForServer() {
+  const snapshot = JSON.parse(JSON.stringify(state));
+  delete snapshot.sync;
+  snapshot.auth = { ...(snapshot.auth || {}), apiToken: "" };
+  snapshot.users = (Array.isArray(snapshot.users) ? snapshot.users : []).map((user) => {
+    const { password, ...safeUser } = user;
+    return safeUser;
+  });
+  return snapshot;
 }
 
 function render() {
@@ -416,7 +632,7 @@ function registerForm() {
 function layout(content) {
   const active = state.currentView;
   return `
-    <main class="screen">
+    <main class="screen view-${active}">
       <header class="topbar">
         <button class="icon-button" type="button" data-action="drawer" aria-label="Abrir menu">☰</button>
         <div class="brand">
@@ -477,7 +693,7 @@ function themeIcon() {
 }
 
 function logoSrc() {
-  return state.theme === "dark" ? "./pet-icon-dark.svg" : "./pet-icon.svg";
+  return state.theme === "dark" ? "./assets/pet-icon-dark.svg" : "./assets/pet-icon.svg";
 }
 
 function homeView() {
@@ -582,7 +798,7 @@ function walletView() {
 
   const petVaccines = getVaccines(pet.id);
   const petDocs = state.documents.filter((doc) => doc.petId === pet.id);
-  return walletDocumentView(pet, petVaccines, petDocs);
+  return animalWalletDocumentView(pet, petVaccines, petDocs);
 
   return `
     <div class="page-head">
@@ -668,6 +884,153 @@ function walletView() {
       </aside>
     </section>
   `;
+}
+
+function animalWalletDocumentView(pet, petVaccines, petDocs) {
+  const nextVaccine = petVaccines[0];
+  const status = nextVaccine ? vaccineStatus(nextVaccine) : { type: "warn", label: "Sem vacinas" };
+  const documentNumber = pet.registry || `PET-${pet.id.slice(-6).toUpperCase()}`;
+  const issuedAt = formatDate(todayISO);
+  const address = ownerAddress();
+
+  return `
+    <div class="page-head">
+      <span class="eyebrow">Documento digital</span>
+      <h1>Carteira do ${escapeHTML(pet.name)}</h1>
+      <p class="muted">Carteira animal com frente e verso, assinatura digital, dados do tutor e PDF para baixar.</p>
+    </div>
+
+    <section class="wallet-document" aria-label="Carteira de identidade animal">
+      <div class="wallet-document-top">
+        <button class="ghost-button" type="button" data-action="view" data-view="pets">Voltar</button>
+        <div class="button-row">
+          <button class="primary-button" type="button" data-action="edit-pet" data-id="${pet.id}">Editar Pet</button>
+          <button class="secondary-button" type="button" data-action="sign-pet" data-id="${pet.id}">Assinar</button>
+          <button class="secondary-button" type="button" data-action="download-wallet-pdf" data-id="${pet.id}">Baixar PDF</button>
+        </div>
+      </div>
+
+      <div class="animal-wallet-pages" id="walletPrintArea">
+        <article class="animal-wallet-card animal-wallet-front" aria-label="Frente da carteira animal">
+          <div class="animal-wallet-ribbon">República Federativa dos Animais</div>
+          <div class="animal-wallet-paper">
+            <div class="animal-wallet-heading">
+              <strong>Brasil</strong>
+              <span>Carteira de Identidade Animal</span>
+            </div>
+            <div class="animal-wallet-front-grid">
+              <div class="animal-photo-box">
+                ${walletPhoto(pet)}
+                <span>Foto do pet</span>
+              </div>
+              <div class="animal-paw-panel" aria-hidden="true">
+                <span>🐾</span>
+                <span>🐾</span>
+                <span>🐾</span>
+              </div>
+            </div>
+            <div class="animal-signature-line">
+              ${signatureMarkup(pet, state.owner.name)}
+              <span>Assinatura do titular</span>
+            </div>
+          </div>
+          <div class="animal-wallet-code">🐾🐾🐾🐾🐾🐾🐾🐾🐾</div>
+        </article>
+
+        <article class="animal-wallet-card animal-wallet-back" aria-label="Verso da carteira animal">
+          <div class="animal-wallet-ribbon">🐾🐾🐾🐾🐾🐾🐾🐾🐾🐾🐾</div>
+          <div class="animal-valid-bar">Válido em todo território nacional</div>
+          <div class="animal-wallet-paper animal-wallet-paper-back">
+            <div class="animal-data-grid">
+              ${animalData("Nome", pet.name)}
+              ${animalData("Raça", pet.breed)}
+              ${animalData("Nascimento", formatDate(pet.birthDate))}
+              ${animalData("Natural de", state.owner.city)}
+              ${animalData("Espécie", pet.species)}
+              ${animalData("Cor", pet.color)}
+              ${animalData("Sexo", pet.sex)}
+              ${animalData("CEP", state.owner.zipCode || "")}
+              ${animalData("Endereço", state.owner.address)}
+              ${animalData("Estado", state.owner.state)}
+              ${animalData("Bairro", state.owner.neighborhood)}
+              ${animalData("Tel. Cel.", state.owner.phone)}
+              ${animalData("Cidade", state.owner.city)}
+              ${animalData("Microchip", pet.microchip)}
+              ${animalData("E-mail", state.owner.email)}
+              ${animalData("Registro", documentNumber)}
+            </div>
+            <div class="animal-description-box">
+              <span>Descrição</span>
+              <p>${escapeHTML(pet.notes || pet.temperament || "Sem observações cadastradas.")}</p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="button-row">
+        <button class="secondary-button" type="button" data-action="new-vaccine" data-id="${pet.id}">＋ Vacina</button>
+        <button class="secondary-button" type="button" data-action="new-document" data-id="${pet.id}">＋ Documento</button>
+        <button class="danger-button" type="button" data-action="delete-pet" data-id="${pet.id}">Deletar Pet</button>
+      </div>
+    </section>
+
+    <section class="section screen-grid">
+      <div class="grid">
+        <div class="card">
+          <div class="section-title">
+            <div>
+              <h2>Dados completos</h2>
+              <p class="muted small">Informações usadas no documento digital.</p>
+            </div>
+          </div>
+          <div class="detail-list">
+            ${detailRow("Espécie", pet.species)}
+            ${detailRow("Raça", pet.breed)}
+            ${detailRow("Sexo", pet.sex)}
+            ${detailRow("Nascimento", formatDate(pet.birthDate))}
+            ${detailRow("Peso", pet.weight ? `${pet.weight} kg` : "")}
+            ${detailRow("Microchip", pet.microchip)}
+            ${detailRow("Tutor", state.owner.name)}
+            ${detailRow("Endereço", address)}
+            ${detailRow("Vacina", nextVaccine ? `${nextVaccine.name} - ${status.label}` : "Sem vacinas")}
+            ${detailRow("Emitido em", issuedAt)}
+            ${detailRow("Observações", pet.notes)}
+          </div>
+        </div>
+        <div class="card">
+          <h2>Vacinas</h2>
+          ${petVaccines.length ? `<div class="timeline" style="margin-top: 12px;">${petVaccines.map(vaccineItem).join("")}</div>` : emptyState("✓", "Sem vacinas", "Adicione o primeiro registro de vacinação.")}
+        </div>
+      </div>
+      <aside class="grid">
+        <div class="card">
+          <h2>Documentos</h2>
+          ${petDocs.length ? `<div class="grid" style="margin-top: 12px;">${petDocs.map(documentItem).join("")}</div>` : emptyState("□", "Sem documentos", "Registre atestados e exames importantes.")}
+        </div>
+      </aside>
+    </section>
+  `;
+}
+
+function animalData(label, value) {
+  return `
+    <div class="animal-data">
+      <span>${label}</span>
+      <strong>${escapeHTML(value || "")}</strong>
+    </div>
+  `;
+}
+
+function walletPhoto(pet) {
+  if (pet.photo) return `<img src="${escapeHTML(safeImageSrc(pet.photo))}" alt="Foto de ${escapeHTML(pet.name)}" />`;
+  return `<div class="animal-photo-placeholder">${initials(pet.name)}</div>`;
+}
+
+function signatureMarkup(pet, fallbackName = "") {
+  if (pet.signature) return `<img src="${escapeHTML(safeImageSrc(pet.signature))}" alt="Assinatura digital" />`;
+  return `<strong>${escapeHTML(fallbackName || "Assinatura digital")}</strong>`;
 }
 
 function walletDocumentView(pet, petVaccines, petDocs) {
@@ -999,29 +1362,75 @@ function settingsView() {
         </div>
         <div class="card">
           <h2>Dados do aplicativo</h2>
-          <p class="muted" style="margin-top: 8px;">Tudo fica salvo neste navegador pelo armazenamento local do dispositivo.</p>
+          <p class="muted" style="margin-top: 8px;">O celular mantém uma cópia offline e sincroniza com o PostgreSQL quando o servidor está acessível.</p>
           <div class="button-row" style="margin-top: 14px;">
             <button class="secondary-button" type="button" data-action="toggle-theme">${themeIcon()} Tema ${state.theme === "dark" ? "claro" : "escuro"}</button>
             <button class="secondary-button" type="button" data-action="export">Exportar</button>
             <button class="secondary-button" type="button" data-action="import">Importar</button>
+            <button class="secondary-button" type="button" data-action="sync-now">Sincronizar</button>
             <button class="secondary-button" type="button" data-action="logout">Sair</button>
             <button class="danger-button" type="button" data-action="reset-demo">Restaurar demo</button>
           </div>
         </div>
       </div>
       <aside class="grid">
+        ${syncCard()}
         ${installBanner(true)}
         <div class="card">
           <h2>Compatibilidade</h2>
           <div class="detail-list">
             ${detailRow("Android", "Instalável pelo Chrome ou Edge")}
             ${detailRow("iPhone", "Adicionar à Tela de Início pelo Safari")}
-            ${detailRow("Offline", "Arquivos principais ficam em cache")}
+            ${detailRow("Offline", "Arquivos ficam em cache e dados ficam no aparelho")}
+            ${detailRow("Banco", "PostgreSQL via API /api/sync")}
           </div>
         </div>
       </aside>
     </section>
   `;
+}
+
+function syncCard() {
+  const sync = { ...defaultState.sync, ...(state.sync || {}) };
+  return `
+    <div class="card">
+      <div class="section-title">
+        <div>
+          <h2>Banco de dados</h2>
+          <p class="muted small">${syncDescription(sync)}</p>
+        </div>
+        ${syncPill(sync)}
+      </div>
+      <div class="detail-list" style="margin-top: 12px;">
+        ${detailRow("Servidor", sync.apiOnline ? "Conectado" : "Aguardando conexão")}
+        ${detailRow("Última sincronização", sync.lastSyncedAt ? formatDateTime(sync.lastSyncedAt) : "Ainda não sincronizado")}
+        ${sync.lastError ? detailRow("Aviso", sync.lastError) : ""}
+      </div>
+      <div class="button-row" style="margin-top: 14px;">
+        <button class="primary-button" type="button" data-action="sync-now">Sincronizar agora</button>
+      </div>
+    </div>
+  `;
+}
+
+function syncPill(sync) {
+  const className = sync.status === "synced" ? "ok" : sync.status === "error" ? "danger" : "warn";
+  return `<span class="pill ${className}">${syncLabel(sync.status)}</span>`;
+}
+
+function syncLabel(status) {
+  if (status === "synced") return "Sincronizado";
+  if (status === "syncing") return "Sincronizando";
+  if (status === "error") return "Offline";
+  return "Local";
+}
+
+function syncDescription(sync) {
+  if (!state.auth?.apiToken) return "Conta local. Faça login com o servidor ativo para gravar no banco.";
+  if (sync.status === "synced") return "Dados salvos no celular e no PostgreSQL.";
+  if (sync.status === "syncing") return "Enviando alterações para a API.";
+  if (sync.status === "error") return "O app segue funcionando offline no celular.";
+  return "Pronto para sincronizar com a API.";
 }
 
 function statusCard(icon, label, value) {
@@ -1076,6 +1485,9 @@ function petCard(pet, compact = false) {
 }
 
 function petAvatar(pet) {
+  if (pet.photo) {
+    return `<span class="pet-avatar has-photo"><img src="${escapeHTML(safeImageSrc(pet.photo))}" alt="${escapeHTML(pet.name)}" /></span>`;
+  }
   return `<span class="pet-avatar" style="background:${escapeHTML(pet.avatarColor || "#17716b")}">${initials(pet.name)}</span>`;
 }
 
@@ -1230,7 +1642,9 @@ function openPetModal(id = "") {
     temperament: "",
     allergies: "",
     notes: "",
-    avatarColor: "#17716b"
+    avatarColor: "#17716b",
+    photo: "",
+    signature: ""
   };
 
   openModal(`
@@ -1241,6 +1655,13 @@ function openPetModal(id = "") {
     <div class="modal-body">
       <form class="form" data-form="pet">
         <input type="hidden" name="id" value="${escapeHTML(pet.id)}" />
+        <input type="hidden" name="photo" value="${escapeHTML(pet.photo || "")}" data-pet-photo-value />
+        <input type="hidden" name="signature" value="${escapeHTML(pet.signature || "")}" />
+        <div class="pet-photo-editor">
+          <div class="pet-photo-preview" data-pet-photo-preview>${walletPhoto(pet)}</div>
+          <label class="secondary-button" for="petPhotoInput">Escolher foto</label>
+          <input id="petPhotoInput" class="hidden" type="file" accept="image/*" data-pet-photo />
+        </div>
         <div class="form-grid two">
           ${field("Nome", "name", pet.name, "text", true)}
           ${selectField("Espécie", "species", pet.species, ["Cachorro", "Gato", "Ave", "Coelho", "Outros"])}
@@ -1282,6 +1703,7 @@ function openOwnerModal() {
           ${field("Bairro", "neighborhood", state.owner.neighborhood)}
           ${field("Cidade", "city", state.owner.city)}
           ${field("Estado", "state", state.owner.state)}
+          ${field("CEP", "zipCode", state.owner.zipCode)}
           ${field("Contato de emergência", "emergencyName", state.owner.emergencyName)}
           ${field("Telefone de emergência", "emergencyPhone", state.owner.emergencyPhone, "tel")}
         </div>
@@ -1423,11 +1845,182 @@ function closeModal() {
   document.querySelectorAll("[data-modal]").forEach((modal) => modal.remove());
 }
 
-function login(data) {
+async function handlePetPhotoInput(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+
+  try {
+    const dataUrl = await imageFileToDataUrl(file, 900);
+    const form = input.closest("form");
+    const hidden = form?.querySelector("[data-pet-photo-value]");
+    const preview = form?.querySelector("[data-pet-photo-preview]");
+    if (hidden) hidden.value = dataUrl;
+    if (preview) preview.innerHTML = `<img src="${escapeHTML(dataUrl)}" alt="Foto do pet" />`;
+    notify("Foto pronta para salvar.");
+  } catch (error) {
+    console.error(error);
+    notify("Não foi possível carregar a foto.");
+  }
+}
+
+function openSignatureModal(id = "") {
+  const pet = state.pets.find((item) => item.id === id) || getSelectedPet();
+  if (!pet) return;
+
+  openModal(`
+    <div class="modal-head">
+      <h2>Assinatura digital</h2>
+      <button class="icon-button" type="button" data-action="close-modal" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="signature-pad-wrap">
+        <canvas class="signature-pad" width="900" height="300" data-signature-pad data-pet-id="${escapeHTML(pet.id)}"></canvas>
+        <div class="button-row">
+          <button class="secondary-button" type="button" data-action="clear-signature">Limpar</button>
+          <button class="primary-button" type="button" data-action="save-signature" data-id="${pet.id}">Salvar assinatura</button>
+        </div>
+      </div>
+    </div>
+  `);
+
+  const canvas = document.querySelector("[data-signature-pad]");
+  setupSignaturePad(canvas, pet.signature);
+}
+
+function setupSignaturePad(canvas, initialData = "") {
+  if (!canvas) return;
+  const context = canvas.getContext("2d");
+  let drawing = false;
+  let lastPoint = null;
+
+  const resize = () => {
+    const ratio = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.max(Math.round(rect.width * ratio), 600);
+    canvas.height = Math.max(Math.round(rect.height * ratio), 210);
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    clearCanvas(context, canvas);
+  };
+
+  const point = (event) => {
+    const rect = canvas.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  };
+
+  const draw = (event) => {
+    if (!drawing) return;
+    const current = point(event);
+    context.strokeStyle = "#123836";
+    context.lineWidth = 3;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.beginPath();
+    context.moveTo(lastPoint.x, lastPoint.y);
+    context.lineTo(current.x, current.y);
+    context.stroke();
+    lastPoint = current;
+  };
+
+  resize();
+  if (initialData) drawSignatureImage(context, initialData, canvas);
+
+  canvas.addEventListener("pointerdown", (event) => {
+    drawing = true;
+    lastPoint = point(event);
+    canvas.setPointerCapture(event.pointerId);
+  });
+  canvas.addEventListener("pointermove", draw);
+  canvas.addEventListener("pointerup", () => {
+    drawing = false;
+    lastPoint = null;
+  });
+  canvas.addEventListener("pointerleave", () => {
+    drawing = false;
+    lastPoint = null;
+  });
+}
+
+function clearCanvas(context, canvas) {
+  const rect = canvas.getBoundingClientRect();
+  context.clearRect(0, 0, rect.width, rect.height);
+  context.fillStyle = "#f5fff9";
+  context.fillRect(0, 0, rect.width, rect.height);
+  context.strokeStyle = "rgba(18, 56, 54, 0.26)";
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(34, rect.height - 46);
+  context.lineTo(rect.width - 34, rect.height - 46);
+  context.stroke();
+}
+
+function drawSignatureImage(context, dataUrl, canvas) {
+  const image = new Image();
+  image.onload = () => {
+    const rect = canvas.getBoundingClientRect();
+    context.drawImage(image, 24, 20, rect.width - 48, rect.height - 58);
+  };
+  image.src = safeImageSrc(dataUrl);
+}
+
+function clearSignaturePad() {
+  const canvas = document.querySelector("[data-signature-pad]");
+  const context = canvas?.getContext("2d");
+  if (!canvas || !context) return;
+  clearCanvas(context, canvas);
+}
+
+function saveSignature(id = "") {
+  const canvas = document.querySelector("[data-signature-pad]");
+  if (!canvas) return;
+  const pet = state.pets.find((item) => item.id === id);
+  if (!pet) return;
+  pet.signature = canvas.toDataURL("image/png");
+  saveState();
+  closeModal();
+  notify("Assinatura digital salva.");
+  render();
+}
+
+async function downloadWalletPdf(id = "") {
+  const pet = state.pets.find((item) => item.id === id) || getSelectedPet();
+  if (!pet) return;
+
+  try {
+    const front = await renderWalletCanvas(pet, "front");
+    const back = await renderWalletCanvas(pet, "back");
+    const pdf = createPdfFromCanvases([front, back]);
+    downloadBlob(pdf, `carteira-${slugify(pet.name || "pet")}.pdf`);
+    notify("PDF da carteira baixado.");
+  } catch (error) {
+    console.error(error);
+    notify("Não foi possível gerar o PDF.");
+  }
+}
+
+async function login(data) {
   const email = normalizeEmail(data.email);
+  const password = String(data.password || "");
+
+  try {
+    const payload = await apiRequest("/api/login", {
+      method: "POST",
+      body: { email, password }
+    });
+    applyServerSession(payload, { password });
+    saveState({ sync: false });
+    notify("Login realizado com banco conectado.");
+    render();
+    return;
+  } catch (error) {
+    if (error.status && error.status !== 404 && error.status !== 401) {
+      notify(error.message || "Não foi possível acessar o banco.");
+      return;
+    }
+  }
+
   const user = (state.users || []).find((item) => normalizeEmail(item.email) === email);
 
-  if (!user || user.password !== data.password) {
+  if (!user || user.password !== password) {
     notify("E-mail ou senha inválidos.");
     return;
   }
@@ -1445,11 +2038,11 @@ function login(data) {
 
   state.currentView = "home";
   saveState();
-  notify("Login realizado.");
+  notify(state.auth.apiToken ? "Login realizado. Sincronizando banco..." : "Login local realizado.");
   render();
 }
 
-function register(data) {
+async function register(data) {
   const email = normalizeEmail(data.email);
   const password = String(data.password || "");
   const confirmPassword = String(data.confirmPassword || "");
@@ -1473,6 +2066,35 @@ function register(data) {
     notify("Este e-mail já está cadastrado.");
     setAuthView("login");
     return;
+  }
+
+  try {
+    const payload = await apiRequest("/api/register", {
+      method: "POST",
+      body: {
+        name: String(data.name || "").trim(),
+        email,
+        phone: String(data.phone || "").trim(),
+        password
+      }
+    });
+    applyServerSession(payload, { password });
+    saveState({ sync: false });
+    await syncWithServer("register", { silent: true });
+    notify("Conta criada com banco conectado. Pode cadastrar seu primeiro pet.");
+    render();
+    return;
+  } catch (error) {
+    if (error.status === 409) {
+      notify("Este e-mail já está cadastrado no banco.");
+      setAuthView("login");
+      return;
+    }
+
+    if (error.status && error.status !== 404) {
+      notify(error.message || "Não foi possível criar a conta no banco.");
+      return;
+    }
   }
 
   const user = {
@@ -1508,12 +2130,12 @@ function register(data) {
   };
 
   saveState();
-  notify("Conta criada. Pode cadastrar seu primeiro pet.");
+  notify("Conta criada neste celular. Inicie o servidor para sincronizar com o banco.");
   render();
 }
 
 function logout() {
-  state.auth = { ...state.auth, currentUserEmail: "", authView: "login" };
+  state.auth = { ...state.auth, currentUserEmail: "", authView: "login", apiToken: "" };
   saveState();
   closeModal();
   notify("Sessão encerrada.");
@@ -1530,6 +2152,7 @@ function blankOwner(user = {}) {
     neighborhood: "",
     city: "",
     state: "",
+    zipCode: "",
     emergencyName: "",
     emergencyPhone: ""
   };
@@ -1554,26 +2177,29 @@ function blankTravel() {
   };
 }
 
-function handleForm(form) {
+async function handleForm(form) {
   const data = Object.fromEntries(new FormData(form).entries());
   const type = form.dataset.form;
 
   if (type === "login") {
-    login(data);
+    await login(data);
     return;
   }
 
   if (type === "register") {
-    register(data);
+    await register(data);
     return;
   }
 
   if (type === "pet") {
+    const existingPet = state.pets.find((item) => item.id === data.id);
     const pet = {
       ...data,
       id: data.id || createId("pet"),
       weight: data.weight || "",
-      avatarColor: data.avatarColor || "#17716b"
+      avatarColor: data.avatarColor || "#17716b",
+      photo: data.photo || existingPet?.photo || "",
+      signature: data.signature || existingPet?.signature || ""
     };
     const existing = state.pets.findIndex((item) => item.id === pet.id);
     if (existing >= 0) state.pets[existing] = pet;
@@ -1694,6 +2320,291 @@ function openMaps(query) {
   window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank", "noopener,noreferrer");
 }
 
+function imageFileToDataUrl(file, maxSize = 900) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = reject;
+      image.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.84));
+      };
+      image.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function renderWalletCanvas(pet, side) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1600;
+  canvas.height = 1000;
+  const context = canvas.getContext("2d");
+  const doc = walletPdfData(pet);
+
+  drawRoundedRect(context, 0, 0, canvas.width, canvas.height, 0, "#147a62");
+  drawRoundedRect(context, 0, 210, canvas.width, 790, 0, "#47b84c");
+
+  if (side === "front") {
+    await drawWalletFront(context, pet, doc);
+  } else {
+    await drawWalletBack(context, pet, doc);
+  }
+
+  return canvas;
+}
+
+async function drawWalletFront(context, pet, doc) {
+  drawText(context, "REPÚBLICA FEDERATIVA DOS ANIMAIS", 800, 270, {
+    align: "center",
+    color: "#dff6eb",
+    font: "700 26px Arial"
+  });
+  drawRoundedRect(context, 104, 345, 1392, 560, 34, "#edf7ee");
+  drawText(context, "BRASIL", 800, 398, { align: "center", color: "#2f7045", font: "700 25px Arial" });
+  drawText(context, "CARTEIRA DE IDENTIDADE ANIMAL", 800, 430, { align: "center", color: "#2f7045", font: "700 25px Arial" });
+
+  drawRoundedRect(context, 170, 488, 620, 250, 0, "#cfead1");
+  drawRoundedRect(context, 290, 555, 380, 210, 0, "#fff");
+  if (pet.photo) {
+    await drawDataImage(context, pet.photo, 306, 571, 348, 178, true);
+  } else {
+    drawGrid(context, 306, 571, 348, 178, "#4be09a");
+    drawText(context, initials(pet.name), 480, 686, { align: "center", color: "#ffffff", font: "700 72px Arial" });
+  }
+  drawText(context, "FOTO DO PET", 480, 802, { align: "center", color: "#4b6f54", font: "700 14px Arial" });
+
+  drawRoundedRect(context, 820, 488, 620, 250, 0, "#45ad4d");
+  drawPaws(context, 1130, 565);
+  drawPaws(context, 1130, 675);
+  drawPaws(context, 1130, 785);
+
+  context.strokeStyle = "#163a36";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(170, 842);
+  context.lineTo(1440, 842);
+  context.stroke();
+  if (pet.signature) {
+    await drawDataImage(context, pet.signature, 510, 780, 580, 74, false);
+  } else {
+    drawText(context, doc.ownerName, 800, 830, { align: "center", color: "#14302f", font: "italic 36px Georgia" });
+  }
+  drawText(context, "Assinatura do titular", 800, 878, { align: "center", color: "#587069", font: "18px Arial" });
+  drawText(context, "🐾🐾🐾🐾🐾🐾🐾🐾🐾", 800, 958, { align: "center", color: "#17716b", font: "24px Arial" });
+}
+
+async function drawWalletBack(context, pet, doc) {
+  drawText(context, "🐾🐾🐾🐾🐾🐾🐾🐾🐾🐾🐾", 800, 270, { align: "center", color: "#167c61", font: "24px Arial" });
+  drawRoundedRect(context, 52, 330, 1496, 56, 0, "#ffffff");
+  drawText(context, "VÁLIDO EM TODO TERRITÓRIO NACIONAL", 800, 367, {
+    align: "center",
+    color: "#2f7045",
+    font: "700 23px Arial"
+  });
+
+  drawRoundedRect(context, 78, 438, 1444, 488, 24, "#edf7ee");
+  const rows = [
+    ["NOME", pet.name, "RAÇA", pet.breed],
+    ["NASCIMENTO", formatDate(pet.birthDate), "NATURAL DE", state.owner.city],
+    ["ESPÉCIE", pet.species, "COR", pet.color],
+    ["SEXO", pet.sex, "CEP", state.owner.zipCode || ""],
+    ["ENDEREÇO", state.owner.address, "ESTADO", state.owner.state],
+    ["BAIRRO", state.owner.neighborhood, "TEL. CEL.", state.owner.phone],
+    ["CIDADE", state.owner.city, "MICROCHIP", pet.microchip],
+    ["E-MAIL", state.owner.email, "REGISTRO", doc.documentNumber]
+  ];
+
+  let y = 500;
+  for (const row of rows) {
+    drawLabelValue(context, row[0], row[1], 145, y);
+    drawLabelValue(context, row[2], row[3], 830, y);
+    y += 54;
+  }
+
+  drawRoundedRect(context, 140, 800, 1320, 96, 0, "#c9ebce");
+  drawText(context, "DESCRIÇÃO", 170, 840, { color: "#2f7045", font: "700 18px Arial" });
+  wrapCanvasText(context, pet.notes || pet.temperament || "Sem observações cadastradas.", 170, 870, 1250, 24, {
+    color: "#14302f",
+    font: "18px Arial"
+  });
+}
+
+function walletPdfData(pet) {
+  return {
+    documentNumber: pet.registry || `PET-${pet.id.slice(-6).toUpperCase()}`,
+    ownerName: state.owner.name || "Tutor"
+  };
+}
+
+function drawLabelValue(context, label, value, x, y) {
+  drawText(context, label, x, y, { color: "#2f7045", font: "700 18px Arial" });
+  drawText(context, value || "", x + 190, y, { color: "#14302f", font: "18px Arial" });
+}
+
+function drawPaws(context, x, y) {
+  context.fillStyle = "#1b75bc";
+  for (const [dx, dy, radius] of [[0, 16, 14], [-24, 0, 9], [-8, -14, 9], [10, -14, 9], [26, 0, 9]]) {
+    context.beginPath();
+    context.arc(x + dx, y + dy, radius, 0, Math.PI * 2);
+    context.fill();
+  }
+}
+
+function drawGrid(context, x, y, width, height, color) {
+  drawRoundedRect(context, x, y, width, height, 0, color);
+  context.strokeStyle = "rgba(255,255,255,0.28)";
+  context.lineWidth = 1;
+  for (let gx = x; gx <= x + width; gx += 28) {
+    context.beginPath();
+    context.moveTo(gx, y);
+    context.lineTo(gx, y + height);
+    context.stroke();
+  }
+  for (let gy = y; gy <= y + height; gy += 28) {
+    context.beginPath();
+    context.moveTo(x, gy);
+    context.lineTo(x + width, gy);
+    context.stroke();
+  }
+}
+
+function drawRoundedRect(context, x, y, width, height, radius, fill) {
+  context.fillStyle = fill;
+  context.beginPath();
+  if (radius && typeof context.roundRect === "function") {
+    context.roundRect(x, y, width, height, radius);
+  } else {
+    context.rect(x, y, width, height);
+  }
+  context.fill();
+}
+
+function drawText(context, text, x, y, options = {}) {
+  context.fillStyle = options.color || "#14302f";
+  context.font = options.font || "18px Arial";
+  context.textAlign = options.align || "left";
+  context.textBaseline = "alphabetic";
+  context.fillText(String(text || ""), x, y);
+}
+
+function wrapCanvasText(context, text, x, y, maxWidth, lineHeight, options = {}) {
+  context.fillStyle = options.color || "#14302f";
+  context.font = options.font || "18px Arial";
+  const words = String(text || "").split(/\s+/);
+  let line = "";
+  for (const word of words) {
+    const testLine = line ? `${line} ${word}` : word;
+    if (context.measureText(testLine).width > maxWidth && line) {
+      context.fillText(line, x, y);
+      line = word;
+      y += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  if (line) context.fillText(line, x, y);
+}
+
+function drawDataImage(context, dataUrl, x, y, width, height, cover = false) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      if (cover) {
+        const scale = Math.max(width / image.width, height / image.height);
+        const sourceWidth = width / scale;
+        const sourceHeight = height / scale;
+        const sourceX = (image.width - sourceWidth) / 2;
+        const sourceY = (image.height - sourceHeight) / 2;
+        context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
+      } else {
+        context.drawImage(image, x, y, width, height);
+      }
+      resolve();
+    };
+    image.onerror = resolve;
+    image.src = safeImageSrc(dataUrl);
+  });
+}
+
+function createPdfFromCanvases(canvases) {
+  const pageWidth = 842;
+  const pageHeight = 595;
+  const margin = 28;
+  const imageWidth = pageWidth - margin * 2;
+  const imageHeight = imageWidth * (1000 / 1600);
+  const imageY = (pageHeight - imageHeight) / 2;
+  const objects = [];
+  const pages = [];
+
+  canvases.forEach((canvas, index) => {
+    const imageData = canvas.toDataURL("image/jpeg", 0.92).split(",")[1];
+    const imageObject = objects.push(
+      `<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${base64ToBinary(imageData).length} >>\nstream\n${base64ToBinary(imageData)}\nendstream`
+    ) + 2;
+    const content = `q\n${imageWidth} 0 0 ${imageHeight} ${margin} ${imageY} cm\n/Im${index} Do\nQ`;
+    const contentObject = objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`) + 2;
+    const pageObject = objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /Im${index} ${imageObject} 0 R >> >> /Contents ${contentObject} 0 R >>`
+    ) + 2;
+    pages.push(`${pageObject} 0 R`);
+  });
+
+  const pageTree = `<< /Type /Pages /Kids [${pages.join(" ")}] /Count ${pages.length} >>`;
+  const catalog = "<< /Type /Catalog /Pages 2 0 R >>";
+  const ordered = [catalog, pageTree, ...objects];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+
+  ordered.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+
+  const xref = pdf.length;
+  pdf += `xref\n0 ${ordered.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${ordered.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return new Blob([binaryStringToUint8Array(pdf)], { type: "application/pdf" });
+}
+
+function base64ToBinary(base64) {
+  const raw = atob(base64);
+  let binary = "";
+  for (let index = 0; index < raw.length; index += 1) {
+    binary += String.fromCharCode(raw.charCodeAt(index));
+  }
+  return binary;
+}
+
+function binaryStringToUint8Array(binary) {
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index) & 0xff;
+  }
+  return bytes;
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function filteredPets() {
   return state.pets.filter((pet) => {
     const matchesFilter = petFilter === "all" || pet.species === petFilter || (petFilter === "Outros" && !["Cachorro", "Gato"].includes(pet.species));
@@ -1810,6 +2721,19 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
 }
 
+function formatDateTime(value) {
+  if (!value) return "Não informado";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
 function toISODate(date) {
   return date.toISOString().slice(0, 10);
 }
@@ -1821,6 +2745,21 @@ function escapeHTML(value = "") {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function safeImageSrc(value = "") {
+  const text = String(value || "");
+  if (text.startsWith("data:image/") || text.startsWith("./") || text.startsWith("/")) return text;
+  return "";
+}
+
+function slugify(value = "") {
+  return String(value || "pet")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || "pet";
 }
 
 function onlyDigits(value = "") {

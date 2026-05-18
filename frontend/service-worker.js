@@ -1,20 +1,20 @@
-const CACHE_NAME = "identificcao-pet-v6";
+const CACHE_NAME = "identificcao-pet-v12";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=6",
+  "./styles.css?v=12",
   "./styles.css",
-  "./app.js?v=6",
+  "./app.js?v=12",
   "./app.js",
   "./manifest.webmanifest",
-  "./pet-icon.svg",
-  "./pet-icon-dark.svg",
-  "./pet-icon-180.png",
-  "./pet-icon-192.png",
-  "./pet-icon-512.png",
-  "./pet-icon-maskable-512.png",
-  "./pet-icon-dark-192.png",
-  "./pet-icon-dark-512.png"
+  "./assets/pet-icon.svg",
+  "./assets/pet-icon-dark.svg",
+  "./assets/pet-icon-180.png",
+  "./assets/pet-icon-192.png",
+  "./assets/pet-icon-512.png",
+  "./assets/pet-icon-maskable-512.png",
+  "./assets/pet-icon-dark-192.png",
+  "./assets/pet-icon-dark-512.png"
 ];
 
 self.addEventListener("install", (event) => {
@@ -22,6 +22,10 @@ self.addEventListener("install", (event) => {
     caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
   );
   self.skipWaiting();
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -35,6 +39,8 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith("/api/")) return;
 
   event.respondWith(
     fetch(event.request)

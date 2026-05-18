@@ -1,97 +1,109 @@
-# Identificção Pet - Carteira Digital para Pets
+# Identificação Pet - Carteira Digital para Pets
 
-Aplicação web/PWA para funcionar como carteira digital de pets em celulares Android e iOS.
+PWA para carteira digital de pets com frontend separado, backend Node e PostgreSQL.
 
-## Como abrir no computador
-
-Execute dentro desta pasta:
-
-```powershell
-python -m http.server 5240 --bind 127.0.0.1
-```
-
-Depois acesse:
+## Estrutura
 
 ```text
-http://127.0.0.1:5240/
+PetIdentification/
+  frontend/
+    index.html
+    app.js
+    styles.css
+    service-worker.js
+    manifest.webmanifest
+    assets/
+  backend/
+    server.js
+    database.js
+    db/schema.sql
+    scripts/setup-db.js
+    package.json
+  package.json
+  README.md
 ```
 
-## Como testar no celular sem hospedar
+## Rodar com banco
 
-O app já está configurado como PWA. O detalhe importante é que o navegador só libera instalação completa em uma origem segura: HTTPS ou localhost. Em `http://IP:porta`, normalmente ele deixa criar apenas um atalho.
+O app salva primeiro no celular para funcionar offline. Quando o servidor está acessível, ele sincroniza com a API `/api/sync` e grava no PostgreSQL.
 
-### Opção simples: mesma rede Wi-Fi
-
-No computador, rode o servidor aceitando acesso da rede:
+### 1. Subir PostgreSQL local de teste
 
 ```powershell
-python -m http.server 5240 --bind 0.0.0.0
+$data='C:\tmp\pet-postgres-data'
+if (!(Test-Path $data)) {
+  & 'C:\Program Files\PostgreSQL\18\bin\initdb.exe' -D $data -U postgres -A trust --encoding=UTF8 --locale=C
+}
+& 'C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe' -D $data -o '"-p" "55432" "-h" "127.0.0.1"' -l 'C:\tmp\pet-postgres.log' start
 ```
 
-Descubra o IP do computador:
+Configure a conexão:
+
+```powershell
+$env:DATABASE_URL="postgres://postgres@127.0.0.1:55432/pet_identification"
+```
+
+### 2. Instalar e preparar
+
+Na raiz do projeto:
+
+```powershell
+npm.cmd --prefix backend install
+npm.cmd run db:setup
+npm.cmd start
+```
+
+Abra:
+
+```text
+http://127.0.0.1:5241/
+```
+
+API de saúde:
+
+```text
+http://127.0.0.1:5241/api/health
+```
+
+## Rodar no celular
+
+Com computador e celular na mesma rede Wi-Fi, descubra o IP:
 
 ```powershell
 ipconfig
 ```
 
-No celular, estando no mesmo Wi-Fi, abra no navegador:
+No celular:
 
 ```text
-http://SEU-IP:5240/
+http://SEU-IP:5241/
 ```
 
-Exemplo:
+Neste computador, o IP de rede local encontrado foi:
 
 ```text
-http://192.168.0.25:5240/
+http://192.168.0.9:5241/
 ```
 
-Essa opção é ótima para testar o visual e as telas. Para instalar como aplicativo PWA, use HTTPS ou localhost.
-
-### Android com cabo USB: melhor para testar PWA local
-
-Com o Android conectado e depuração USB ativada, rode:
+Para instalação PWA completa, Android/iOS normalmente exigem HTTPS ou localhost. Para Android com cabo USB:
 
 ```powershell
-python -m http.server 5240 --bind 127.0.0.1
-adb reverse tcp:5240 tcp:5240
+adb reverse tcp:5241 tcp:5241
 ```
 
-No celular, abra:
+Depois abra no celular:
 
 ```text
-http://127.0.0.1:5240/
+http://127.0.0.1:5241/
 ```
 
-Assim o Chrome do Android enxerga como localhost, o que ajuda a testar recursos de PWA sem publicar em hospedagem.
+## Funcionalidades principais
 
-### iPhone
-
-Para testar as telas, use a opção da mesma rede Wi-Fi. Para testar instalação/offline de PWA no iPhone, normalmente será necessário HTTPS.
-
-## Para virar app instalável de verdade
-
-Há três caminhos:
-
-- PWA hospedada em HTTPS: é o caminho mais simples para instalar pelo navegador.
-- Teste local Android com ADB: bom para TCC e validação sem hospedagem.
-- APK/IPA com Capacitor: empacota esta mesma aplicação web como aplicativo nativo para loja ou instalação manual.
-
-## O que já está incluído
-
-- Login e cadastro locais para o protótipo.
-- Sessão confiável no celular: depois de entrar, o app abre direto no início.
-- Cadastro e edição de pets.
-- Documento digital do pet em estilo carteira oficial.
-- Tema claro e tema escuro.
-- Dados do tutor.
-- Histórico de vacinas e alerta de próximas doses.
-- Documentos e atestados.
-- Checklist de viagem com pet.
-- Busca de veterinárias próximas pelo endereço do tutor.
-- Backup por exportação/importação JSON.
-- Manifest e service worker para instalação como PWA.
-
-## Observação sobre login
-
-Nesta versão de TCC, a conta fica salva no próprio aparelho/navegador usando armazenamento local. Isso é suficiente para protótipo e apresentação. Para login real entre vários celulares, seria necessário conectar um backend com banco de dados e autenticação.
+- Carteira animal com frente e verso inspirada nos exemplos enviados.
+- Edição completa dos dados do pet.
+- Upload de foto do pet.
+- Assinatura digital no próprio app.
+- Download da carteira em PDF.
+- Cadastro e login via API com senha em hash.
+- Sincronização offline/online com PostgreSQL.
+- Manifest e service worker para PWA.

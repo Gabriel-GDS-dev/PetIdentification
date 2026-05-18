@@ -1,0 +1,10 @@
+{
+  "name": "pet-identification-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "npm.cmd --prefix backend start",
+    "dev": "npm.cmd --prefix backend run dev",
+    "db:setup": "npm.cmd --prefix backend run db:setup"
+  }
+}

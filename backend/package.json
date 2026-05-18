@@ -1,0 +1,15 @@
+{
+  "name": "pet-identification",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PWA de identificacao pet com API Node e PostgreSQL.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "db:setup": "node scripts/setup-db.js"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  }
+}
