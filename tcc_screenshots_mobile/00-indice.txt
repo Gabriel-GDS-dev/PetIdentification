@@ -1,0 +1,20 @@
+Screenshots mobile 390x844 para TCC
+Gerado em: 2026-05-24T18:43:47.065Z
+Origem usada: http://127.0.0.1:5242/
+
+01-login.png
+02-cadastro.png
+03-inicio.png
+04-pets.png
+05-carteira.png
+06-vacinas.png
+07-viagem.png
+08-veterinarias.png
+09-configuracoes.png
+10-menu-lateral.png
+11-formulario-pet.png
+12-formulario-vacina.png
+13-formulario-documento.png
+14-formulario-viagem.png
+15-formulario-tutor.png
+16-assinatura-digital.png
