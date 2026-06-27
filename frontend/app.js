@@ -206,6 +206,7 @@ let vaccineFilter = "all";
 let searchTerm = "";
 let syncTimer = null;
 let syncing = false;
+let walletSlideIndex = 0;
 
 const app = document.querySelector("#app");
 const toast = document.querySelector("#toast");
@@ -259,8 +260,10 @@ document.addEventListener("click", (event) => {
   if (name === "clear-signature") clearSignaturePad();
   if (name === "save-signature") saveSignature(id || state.selectedPetId);
   if (name === "download-wallet-pdf") downloadWalletPdf(id || state.selectedPetId);
+  if (name === "wallet-slide") setWalletSlide(Number(action.dataset.slide));
   if (name === "pet-wallet") {
     state.selectedPetId = id;
+    walletSlideIndex = 0;
     navigate("wallet");
   }
   if (name === "new-vaccine") openVaccineModal(id || state.selectedPetId);
@@ -315,6 +318,29 @@ document.addEventListener("change", async (event) => {
     state.travel.selectedPetId = event.target.value;
     saveState();
     render();
+  }
+});
+
+document.addEventListener(
+  "scroll",
+  (event) => {
+    const track = event.target;
+    if (!(track instanceof HTMLElement) || !track.matches("[data-wallet-track]")) return;
+    const nextIndex = Math.round(track.scrollLeft / Math.max(track.clientWidth, 1));
+    updateWalletSlideControls(nextIndex);
+  },
+  true
+);
+
+document.addEventListener("keydown", (event) => {
+  if (!event.target.matches("[data-wallet-track]")) return;
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    setWalletSlide(walletSlideIndex - 1);
+  }
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    setWalletSlide(walletSlideIndex + 1);
   }
 });
 
@@ -548,6 +574,7 @@ function stateForServer() {
 function render() {
   applyTheme();
   app.innerHTML = isAuthenticated() ? layout(screenTemplate()) : authView();
+  if (state.currentView === "wallet") requestAnimationFrame(() => setWalletSlide(walletSlideIndex, false));
 }
 
 function applyTheme() {
@@ -673,6 +700,7 @@ function screenTemplate() {
 }
 
 function navigate(view) {
+  if (view === "wallet" && state.currentView !== "wallet") walletSlideIndex = 0;
   state.currentView = view;
   saveState();
   closeModal();
@@ -895,76 +923,134 @@ function animalWalletDocumentView(pet, petVaccines, petDocs) {
 
   return `
     <div class="page-head">
-      <span class="eyebrow">Documento digital</span>
+      <span class="eyebrow">Identificação oficial do pet</span>
       <h1>Carteira do ${escapeHTML(pet.name)}</h1>
-      <p class="muted">Carteira animal com frente e verso, assinatura digital, dados do tutor e PDF para baixar.</p>
+      <p class="muted">Deslize para consultar a frente e o verso da identificação.</p>
     </div>
 
     <section class="wallet-document" aria-label="Carteira de identidade animal">
       <div class="wallet-document-top">
-        <button class="ghost-button" type="button" data-action="view" data-view="pets">Voltar</button>
+        <button class="ghost-button" type="button" data-action="view" data-view="pets">← Voltar</button>
         <div class="button-row">
-          <button class="primary-button" type="button" data-action="edit-pet" data-id="${pet.id}">Editar Pet</button>
+          <button class="primary-button" type="button" data-action="edit-pet" data-id="${pet.id}">Editar pet</button>
           <button class="secondary-button" type="button" data-action="sign-pet" data-id="${pet.id}">Assinar</button>
           <button class="secondary-button" type="button" data-action="download-wallet-pdf" data-id="${pet.id}">Baixar PDF</button>
         </div>
       </div>
 
-      <div class="animal-wallet-pages" id="walletPrintArea">
-        <article class="animal-wallet-card animal-wallet-front" aria-label="Frente da carteira animal">
-          <div class="animal-wallet-ribbon">República Federativa dos Animais</div>
-          <div class="animal-wallet-paper">
-            <div class="animal-wallet-heading">
-              <strong>Brasil</strong>
-              <span>Carteira de Identidade Animal</span>
-            </div>
-            <div class="animal-wallet-front-grid">
-              <div class="animal-photo-box">
-                ${walletPhoto(pet)}
-                <span>Foto do pet</span>
-              </div>
-              <div class="animal-paw-panel" aria-hidden="true">
-                <span>🐾</span>
-                <span>🐾</span>
-                <span>🐾</span>
-              </div>
-            </div>
-            <div class="animal-signature-line">
-              ${signatureMarkup(pet, state.owner.name)}
-              <span>Assinatura do titular</span>
-            </div>
-          </div>
-          <div class="animal-wallet-code">🐾🐾🐾🐾🐾🐾🐾🐾🐾</div>
-        </article>
+      <div class="wallet-carousel" aria-roledescription="carrossel" aria-label="Frente e verso da carteira pet">
+        <div class="animal-wallet-pages" id="walletPrintArea" data-wallet-track tabindex="0">
+          <article class="animal-wallet-card animal-wallet-front" aria-label="Frente da carteira pet" aria-roledescription="slide">
+            <header class="pet-id-header">
+              <span class="pet-id-seal"><img src="./assets/pet-icon.svg" alt="" /></span>
+              <span class="pet-id-heading">
+                <small>República Federativa do Brasil</small>
+                <strong>Carteira Nacional de Identificação Pet</strong>
+                <em>CNIP · Documento digital</em>
+              </span>
+              <span class="pet-id-country">BR</span>
+            </header>
 
-        <article class="animal-wallet-card animal-wallet-back" aria-label="Verso da carteira animal">
-          <div class="animal-wallet-ribbon">🐾🐾🐾🐾🐾🐾🐾🐾🐾🐾🐾</div>
-          <div class="animal-valid-bar">Válido em todo território nacional</div>
-          <div class="animal-wallet-paper animal-wallet-paper-back">
-            <div class="animal-data-grid">
-              ${animalData("Nome", pet.name)}
-              ${animalData("Raça", pet.breed)}
-              ${animalData("Nascimento", formatDate(pet.birthDate))}
-              ${animalData("Natural de", state.owner.city)}
-              ${animalData("Espécie", pet.species)}
-              ${animalData("Cor", pet.color)}
-              ${animalData("Sexo", pet.sex)}
-              ${animalData("CEP", state.owner.zipCode || "")}
-              ${animalData("Endereço", state.owner.address)}
-              ${animalData("Estado", state.owner.state)}
-              ${animalData("Bairro", state.owner.neighborhood)}
-              ${animalData("Tel. Cel.", state.owner.phone)}
-              ${animalData("Cidade", state.owner.city)}
-              ${animalData("Microchip", pet.microchip)}
-              ${animalData("E-mail", state.owner.email)}
-              ${animalData("Registro", documentNumber)}
+            <div class="pet-id-body">
+              <div class="pet-id-portrait-column">
+                <div class="pet-id-portrait">${walletIdentityPhoto(pet)}</div>
+                <span class="pet-id-caption">Foto do pet</span>
+                <div class="pet-id-signature">
+                  ${signatureMarkup(pet, state.owner.name)}
+                  <span>Assinatura do tutor</span>
+                </div>
+              </div>
+
+              <div class="pet-id-fields">
+                ${walletField("Nome", pet.name, true)}
+                <div class="pet-id-field-row pet-id-field-row-three">
+                  ${walletField("Nascimento", formatDate(pet.birthDate))}
+                  ${walletField("Espécie", pet.species)}
+                  ${walletField("Sexo", pet.sex)}
+                </div>
+                <div class="pet-id-field-row">
+                  ${walletField("Raça", pet.breed)}
+                  ${walletField("Cor", pet.color)}
+                </div>
+                <div class="pet-id-field-row">
+                  ${walletField("Registro", documentNumber)}
+                  ${walletField("Microchip", pet.microchip)}
+                </div>
+                ${walletField("Tutor responsável", state.owner.name, true)}
+                <div class="pet-id-health ${status.type}">
+                  <span>Situação vacinal</span>
+                  <strong>${escapeHTML(nextVaccine ? `${nextVaccine.name} · ${status.label}` : status.label)}</strong>
+                </div>
+              </div>
             </div>
-            <div class="animal-description-box">
-              <span>Descrição</span>
-              <p>${escapeHTML(pet.notes || pet.temperament || "Sem observações cadastradas.")}</p>
+
+            <footer class="pet-id-footer">
+              <strong>${escapeHTML(documentNumber)}</strong>
+              <span>Válida em todo o território nacional</span>
+              <em>1ª via</em>
+            </footer>
+          </article>
+
+          <article class="animal-wallet-card animal-wallet-back" aria-label="Verso da carteira pet" aria-roledescription="slide">
+            <header class="pet-id-header pet-id-header-back">
+              <span class="pet-id-seal"><img src="./assets/pet-icon.svg" alt="" /></span>
+              <span class="pet-id-heading">
+                <small>Identificação Pet</small>
+                <strong>Dados do tutor e segurança</strong>
+                <em>Apresente esta carteira em caso de emergência</em>
+              </span>
+              <span class="pet-id-country">BR</span>
+            </header>
+
+            <div class="pet-id-back-body">
+              <div class="pet-id-owner-fields">
+                <div class="pet-id-field-row">
+                  ${walletField("Tutor", state.owner.name)}
+                  ${walletField("CPF", state.owner.cpf)}
+                </div>
+                <div class="pet-id-field-row">
+                  ${walletField("Telefone", state.owner.phone)}
+                  ${walletField("E-mail", state.owner.email)}
+                </div>
+                ${walletField("Endereço", address, true)}
+                <div class="pet-id-field-row">
+                  ${walletField("Contato de emergência", state.owner.emergencyName)}
+                  ${walletField("Telefone", state.owner.emergencyPhone)}
+                </div>
+                <div class="pet-id-field-row">
+                  ${walletField("Temperamento", pet.temperament)}
+                  ${walletField("Alergias", pet.allergies)}
+                </div>
+                <div class="pet-id-notes">
+                  <span>Observações</span>
+                  <strong>${escapeHTML(pet.notes || "Sem observações cadastradas.")}</strong>
+                </div>
+              </div>
+
+              <div class="pet-id-validation">
+                ${qrTemplate(`${documentNumber}-${pet.microchip}-${state.owner.phone}`)}
+                <strong>QR PET</strong>
+                <span>Validação da identidade</span>
+              </div>
             </div>
+
+            <footer class="pet-id-footer">
+              <strong>Emitida em ${issuedAt}</strong>
+              <span>${escapeHTML(pet.name)} · ${escapeHTML(documentNumber)}</span>
+              <em>Documento digital</em>
+            </footer>
+          </article>
+        </div>
+
+        <div class="wallet-carousel-navigation">
+          <button class="wallet-carousel-arrow" type="button" data-action="wallet-slide" data-slide="0" aria-label="Mostrar frente da carteira">←</button>
+          <div class="wallet-carousel-dots" role="tablist" aria-label="Lados da carteira">
+            <button class="active" type="button" role="tab" data-action="wallet-slide" data-slide="0" aria-label="Frente" aria-selected="true"></button>
+            <button type="button" role="tab" data-action="wallet-slide" data-slide="1" aria-label="Verso" aria-selected="false"></button>
           </div>
-        </article>
+          <button class="wallet-carousel-arrow" type="button" data-action="wallet-slide" data-slide="1" aria-label="Mostrar verso da carteira">→</button>
+        </div>
+        <p class="wallet-carousel-status" aria-live="polite" data-wallet-slide-status>Frente · 1 de 2 — arraste para o lado</p>
       </div>
     </section>
 
@@ -1012,6 +1098,45 @@ function animalWalletDocumentView(pet, petVaccines, petDocs) {
       </aside>
     </section>
   `;
+}
+
+function walletIdentityPhoto(pet) {
+  if (pet.photo) return `<img src="${escapeHTML(safeImageSrc(pet.photo))}" alt="Foto de ${escapeHTML(pet.name)}" />`;
+  return `<div class="pet-id-photo-placeholder">${initials(pet.name)}</div>`;
+}
+
+function walletField(label, value, wide = false) {
+  return `
+    <div class="pet-id-field ${wide ? "wide" : ""}">
+      <span>${label}</span>
+      <strong>${escapeHTML(value || "Não informado")}</strong>
+    </div>
+  `;
+}
+
+function setWalletSlide(index, smooth = true) {
+  const track = document.querySelector("[data-wallet-track]");
+  const normalizedIndex = Math.max(0, Math.min(1, Number.isFinite(index) ? index : 0));
+  walletSlideIndex = normalizedIndex;
+  if (track) {
+    track.scrollTo({
+      left: track.clientWidth * normalizedIndex,
+      behavior: smooth ? "smooth" : "auto"
+    });
+  }
+  updateWalletSlideControls(normalizedIndex);
+}
+
+function updateWalletSlideControls(index) {
+  const normalizedIndex = Math.max(0, Math.min(1, index));
+  walletSlideIndex = normalizedIndex;
+  document.querySelectorAll(".wallet-carousel-dots [data-slide]").forEach((dot) => {
+    const selected = Number(dot.dataset.slide) === normalizedIndex;
+    dot.classList.toggle("active", selected);
+    dot.setAttribute("aria-selected", String(selected));
+  });
+  const status = document.querySelector("[data-wallet-slide-status]");
+  if (status) status.textContent = `${normalizedIndex === 0 ? "Frente" : "Verso"} · ${normalizedIndex + 1} de 2 — arraste para o lado`;
 }
 
 function animalData(label, value) {
@@ -1602,7 +1727,7 @@ function installHint() {
 }
 
 function openInstallHelp() {
-  const localUrl = "http://127.0.0.1:5240/";
+  const localUrl = "http://127.0.0.1:5241/";
   openModal(`
     <div class="modal-head">
       <h2>Instalar como aplicativo</h2>

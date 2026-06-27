@@ -2,10 +2,28 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { Client, Pool } = require("pg");
 
-const DEFAULT_DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:5432/pet_identification";
+const DEFAULT_DATABASE_URL = "postgres://postgres@127.0.0.1:55432/pet_identification";
 
 function getDatabaseUrl() {
   return process.env.DATABASE_URL || DEFAULT_DATABASE_URL;
+}
+
+function formatDatabaseError(error) {
+  if (error?.code === "28P01") {
+    return [
+      "Falha de autenticacao no PostgreSQL.",
+      "Confira a variavel DATABASE_URL ou remova-a para usar o banco local automatico na porta 55432."
+    ].join("\n");
+  }
+
+  if (error?.code === "ECONNREFUSED") {
+    return [
+      "O PostgreSQL local nao esta em execucao.",
+      "Rode 'npm run db:start' e tente novamente."
+    ].join("\n");
+  }
+
+  return error?.message || "Erro desconhecido ao acessar o PostgreSQL.";
 }
 
 function getDatabaseName(databaseUrl = getDatabaseUrl()) {
@@ -57,6 +75,7 @@ module.exports = {
   applySchema,
   createPoolWithSchema,
   ensureDatabase,
+  formatDatabaseError,
   getDatabaseName,
   getDatabaseUrl
 };

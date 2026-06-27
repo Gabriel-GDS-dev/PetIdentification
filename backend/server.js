@@ -1,8 +1,9 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const http = require("node:http");
+const os = require("node:os");
 const path = require("node:path");
-const { createPoolWithSchema, getDatabaseName, getDatabaseUrl } = require("./database");
+const { createPoolWithSchema, formatDatabaseError, getDatabaseName, getDatabaseUrl } = require("./database");
 
 const PORT = Number(process.env.PORT || 5241);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -52,9 +53,32 @@ async function main() {
   });
 
   server.listen(PORT, HOST, () => {
-    console.log(`Pet Identification rodando em http://${HOST}:${PORT}`);
+    console.log(`Pet Identification rodando no computador: http://127.0.0.1:${PORT}`);
+    for (const accessUrl of getNetworkAccessUrls(PORT)) {
+      console.log(`Abra no celular conectado ao mesmo Wi-Fi: ${accessUrl}`);
+    }
     console.log(`Banco conectado: ${getDatabaseName(getDatabaseUrl())}`);
   });
+}
+
+function getNetworkAccessUrls(port) {
+  if (HOST !== "0.0.0.0" && HOST !== "::") return [`http://${HOST}:${port}`];
+
+  const addresses = [];
+  for (const entries of Object.values(os.networkInterfaces())) {
+    for (const entry of entries || []) {
+      if (entry.family !== "IPv4" || entry.internal || !isPrivateIpv4(entry.address)) continue;
+      addresses.push(entry.address);
+    }
+  }
+
+  return [...new Set(addresses)].map((address) => `http://${address}:${port}`);
+}
+
+function isPrivateIpv4(address) {
+  if (/^10\./.test(address) || /^192\.168\./.test(address)) return true;
+  const match = address.match(/^172\.(\d+)\./);
+  return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
 }
 
 async function handleRequest(request, response) {
@@ -557,6 +581,6 @@ process.on("uncaughtException", (error) => {
 
 main().catch((error) => {
   console.error("Nao foi possivel iniciar o servidor.");
-  console.error(error.message);
+  console.error(formatDatabaseError(error));
   process.exitCode = 1;
 });

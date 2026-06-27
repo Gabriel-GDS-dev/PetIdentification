@@ -1,5 +1,5 @@
 const { Client } = require("pg");
-const { applySchema, ensureDatabase, getDatabaseName, getDatabaseUrl } = require("../database");
+const { applySchema, ensureDatabase, formatDatabaseError, getDatabaseName, getDatabaseUrl } = require("../database");
 
 async function main() {
   const databaseUrl = getDatabaseUrl();
@@ -17,6 +17,6 @@ async function main() {
 
 main().catch((error) => {
   console.error("Nao foi possivel preparar o banco.");
-  console.error(error.message);
+  console.error(formatDatabaseError(error));
   process.exitCode = 1;
 });

@@ -27,31 +27,24 @@ PetIdentification/
 
 O app salva primeiro no celular para funcionar offline. Quando o servidor está acessível, ele sincroniza com a API `/api/sync` e grava no PostgreSQL.
 
-### 1. Subir PostgreSQL local de teste
-
-```powershell
-$data='C:\tmp\pet-postgres-data'
-if (!(Test-Path $data)) {
-  & 'C:\Program Files\PostgreSQL\18\bin\initdb.exe' -D $data -U postgres -A trust --encoding=UTF8 --locale=C
-}
-& 'C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe' -D $data -o '"-p" "55432" "-h" "127.0.0.1"' -l 'C:\tmp\pet-postgres.log' start
-```
-
-Configure a conexão:
-
-```powershell
-$env:DATABASE_URL="postgres://postgres@127.0.0.1:55432/pet_identification"
-```
-
-### 2. Instalar e preparar
+### Instalar e preparar
 
 Na raiz do projeto:
 
 ```powershell
 npm.cmd --prefix backend install
-npm.cmd run db:setup
-npm.cmd start
+npm.cmd run celular
 ```
+
+O comando `celular` inicia tudo junto: PostgreSQL, backend, frontend, criação das tabelas e conexão segura com o Android. Não é necessário abrir vários terminais.
+
+Nas próximas vezes, execute somente:
+
+```powershell
+npm.cmd run celular
+```
+
+Também é possível clicar duas vezes no arquivo `iniciar-celular.cmd` na pasta do projeto.
 
 Abra:
 
@@ -65,33 +58,53 @@ API de saúde:
 http://127.0.0.1:5241/api/health
 ```
 
-## Rodar no celular
-
-Com computador e celular na mesma rede Wi-Fi, descubra o IP:
+Para iniciar somente o banco:
 
 ```powershell
-ipconfig
+npm.cmd run db:start
 ```
 
-No celular:
-
-```text
-http://SEU-IP:5241/
-```
-
-Neste computador, o IP de rede local encontrado foi:
-
-```text
-http://192.168.0.9:5241/
-```
-
-Para instalação PWA completa, Android/iOS normalmente exigem HTTPS ou localhost. Para Android com cabo USB:
+Para usar outro PostgreSQL, defina a conexão antes dos comandos:
 
 ```powershell
-adb reverse tcp:5241 tcp:5241
+$env:DATABASE_URL="postgres://USUARIO:SENHA@SERVIDOR:5432/pet_identification"
 ```
 
-Depois abra no celular:
+## Instalar no Android
+
+Na primeira vez:
+
+1. No Android, ative **Opções do desenvolvedor**.
+2. Ative **Depuração USB**.
+3. Conecte o celular ao computador pelo cabo USB.
+4. Desbloqueie o celular e aceite **Permitir depuração USB**.
+5. Execute:
+
+```powershell
+npm.cmd run celular
+```
+
+O ADB oficial será baixado automaticamente para `C:\tmp\pet-android-tools`. Quando o terminal confirmar que o Android está conectado, o Chrome do celular abrirá automaticamente:
+
+```text
+http://127.0.0.1:5241/
+```
+
+No menu do Chrome, toque em **Instalar app** ou **Adicionar à tela inicial**. Depois da primeira instalação, o aplicativo consegue abrir offline; mantenha o cabo e o servidor ativos quando quiser sincronizar com o banco.
+
+Também é possível clicar duas vezes em `iniciar-celular.cmd` para fazer todo esse processo.
+
+### Testar somente pelo Wi-Fi
+
+Para abrir como site em outro aparelho da mesma rede, execute:
+
+```powershell
+npm.cmd start
+```
+
+O terminal mostrará o endereço de rede. Esse modo serve para testar o site, mas não permite a instalação PWA completa porque usa HTTP fora do `localhost`.
+
+No próprio computador, o endereço continua sendo:
 
 ```text
 http://127.0.0.1:5241/
