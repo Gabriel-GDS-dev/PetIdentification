@@ -1,10 +1,10 @@
-const CACHE_NAME = "identificcao-pet-v14";
+const CACHE_NAME = "identificcao-pet-v16";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=14",
+  "./styles.css?v=16",
   "./styles.css",
-  "./app.js?v=14",
+  "./app.js?v=16",
   "./app.js",
   "./manifest.webmanifest",
   "./assets/pet-icon.svg",
@@ -14,7 +14,9 @@ const APP_SHELL = [
   "./assets/pet-icon-512.png",
   "./assets/pet-icon-maskable-512.png",
   "./assets/pet-icon-dark-192.png",
-  "./assets/pet-icon-dark-512.png"
+  "./assets/pet-icon-dark-512.png",
+  "./tcc_screenshots_mobile/Frente.png",
+  "./tcc_screenshots_mobile/Verso.png"
 ];
 
 self.addEventListener("install", (event) => {

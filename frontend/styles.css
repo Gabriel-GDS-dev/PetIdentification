@@ -1475,6 +1475,34 @@ h3 {
   gap: 12px;
 }
 
+.form-section-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.form-section-head span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.cep-lookup-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.cep-status {
+  min-height: 20px;
+  margin-top: -8px;
+}
+
 .field {
   display: grid;
   gap: 6px;
@@ -1496,6 +1524,17 @@ h3 {
   border-radius: 8px;
   background: var(--surface);
   color: var(--ink);
+}
+
+.readonly-field input[readonly] {
+  background: var(--surface-strong);
+  color: var(--muted);
+  cursor: default;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 .field textarea {
@@ -1643,6 +1682,32 @@ h3 {
   display: grid;
   gap: 12px;
   padding: 14px;
+}
+
+.location-status-card {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.location-spinner {
+  width: 34px;
+  height: 34px;
+  border: 4px solid var(--primary-soft);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: location-spin 800ms linear infinite;
+}
+
+.map-attribution {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-align: right;
+}
+
+@keyframes location-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .map-strip {

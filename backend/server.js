@@ -9,8 +9,19 @@ const PORT = Number(process.env.PORT || 5241);
 const HOST = process.env.HOST || "0.0.0.0";
 const SESSION_SECRET = process.env.SESSION_SECRET || "pet-identification-dev-secret";
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
+const EXTERNAL_REQUEST_TIMEOUT_MS = 22000;
+const OVERPASS_API_URL = process.env.OVERPASS_API_URL || "https://overpass-api.de/api/interpreter";
+const GEOCODING_API_URL = process.env.GEOCODING_API_URL || "https://nominatim.openstreetmap.org/search";
+const EXTERNAL_USER_AGENT = "PetIdentification/1.0 (local pet wallet application)";
+const geocodeCache = new Map();
+let lastGeocodeRequestAt = 0;
 
-const PUBLIC_DIR = path.join(__dirname, "..", "frontend");
+const PROJECT_DIR = path.join(__dirname, "..");
+const PUBLIC_DIR = path.join(PROJECT_DIR, "frontend");
+const EXTRA_STATIC_FILES = new Map([
+  ["/tcc_screenshots_mobile/Frente.png", path.join(PROJECT_DIR, "tcc_screenshots_mobile", "Frente.png")],
+  ["/tcc_screenshots_mobile/Verso.png", path.join(PROJECT_DIR, "tcc_screenshots_mobile", "Verso.png")]
+]);
 const STATIC_FILES = new Set([
   "/",
   "/index.html",
@@ -112,6 +123,14 @@ async function handleApi(request, response, url) {
     return sendJson(response, 200, { ok: true, database: getDatabaseName(getDatabaseUrl()), counts: counts.rows[0] });
   }
 
+  if (request.method === "GET" && url.pathname === "/api/address/cep") {
+    return lookupAddressByCep(response, url.searchParams.get("cep"));
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/clinics/nearby") {
+    return findNearbyClinics(response, url.searchParams);
+  }
+
   if (request.method === "POST" && url.pathname === "/api/register") {
     const body = await readJson(request);
     return registerUser(response, body);
@@ -136,6 +155,181 @@ async function handleApi(request, response, url) {
   }
 
   return sendJson(response, 404, { error: "Rota da API nao encontrada." });
+}
+
+async function lookupAddressByCep(response, rawCep) {
+  const cep = cleanText(rawCep).replace(/\D/g, "");
+  if (!/^\d{8}$/.test(cep)) {
+    return sendJson(response, 400, { error: "Informe um CEP com 8 digitos." });
+  }
+
+  const [viaCep, brasilApi] = await Promise.all([
+    fetchExternalJson(`https://viacep.com.br/ws/${cep}/json/`),
+    fetchExternalJson(`https://brasilapi.com.br/api/cep/v2/${cep}`).catch(() => null)
+  ]);
+
+  if (viaCep?.erro) return sendJson(response, 404, { error: "CEP nao encontrado." });
+
+  const coordinates = brasilApi?.location?.coordinates || {};
+  let latitude = finiteNumber(coordinates.latitude);
+  let longitude = finiteNumber(coordinates.longitude);
+  if (latitude === null || longitude === null) {
+    const geocoded = await geocodePublicAddress(viaCep).catch(() => null);
+    latitude = geocoded?.latitude ?? null;
+    longitude = geocoded?.longitude ?? null;
+  }
+
+  return sendJson(response, 200, {
+    zipCode: viaCep.cep || cep,
+    address: viaCep.logradouro || brasilApi?.street || "",
+    neighborhood: viaCep.bairro || brasilApi?.neighborhood || "",
+    city: viaCep.localidade || brasilApi?.city || "",
+    state: viaCep.uf || brasilApi?.state || "",
+    ibge: viaCep.ibge || "",
+    latitude,
+    longitude
+  });
+}
+
+async function geocodePublicAddress(address) {
+  const query = [address.logradouro, address.bairro, address.localidade, address.uf, "Brasil"].filter(Boolean).join(", ");
+  if (!query) return null;
+  const key = query.toLocaleLowerCase("pt-BR");
+  if (geocodeCache.has(key)) return geocodeCache.get(key);
+
+  const waitMs = Math.max(0, 1000 - (Date.now() - lastGeocodeRequestAt));
+  if (waitMs) await new Promise((resolve) => setTimeout(resolve, waitMs));
+  lastGeocodeRequestAt = Date.now();
+
+  const url = new URL(GEOCODING_API_URL);
+  url.searchParams.set("q", query);
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("countrycodes", "br");
+
+  const payload = await fetchExternalJson(url.toString());
+  const first = Array.isArray(payload) ? payload[0] : null;
+  const result = first
+    ? { latitude: finiteNumber(first.lat), longitude: finiteNumber(first.lon) }
+    : null;
+  geocodeCache.set(key, result);
+  return result;
+}
+
+async function findNearbyClinics(response, searchParams) {
+  const latitude = finiteNumber(searchParams.get("lat"));
+  const longitude = finiteNumber(searchParams.get("lon"));
+  const requestedRadius = finiteNumber(searchParams.get("radius")) || 12000;
+  const radius = Math.max(1000, Math.min(20000, requestedRadius));
+
+  if (latitude === null || latitude < -90 || latitude > 90 || longitude === null || longitude < -180 || longitude > 180) {
+    return sendJson(response, 400, { error: "Localizacao do tutor invalida." });
+  }
+
+  const query = `
+    [out:json][timeout:18];
+    (
+      nwr["amenity"="veterinary"](around:${Math.round(radius)},${latitude},${longitude});
+      nwr["healthcare"="veterinary"](around:${Math.round(radius)},${latitude},${longitude});
+    );
+    out center tags 40;
+  `;
+
+  const payload = await fetchExternalJson(OVERPASS_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+    body: new URLSearchParams({ data: query }).toString()
+  });
+
+  const seen = new Set();
+  const clinics = (Array.isArray(payload?.elements) ? payload.elements : [])
+    .map((element) => normalizeClinic(element, latitude, longitude))
+    .filter((clinic) => clinic && !seen.has(clinic.key) && seen.add(clinic.key))
+    .sort((left, right) => left.distance - right.distance)
+    .slice(0, 12)
+    .map(({ key, ...clinic }) => clinic);
+
+  return sendJson(response, 200, {
+    clinics,
+    origin: { latitude, longitude },
+    radius,
+    attribution: "Dados © colaboradores do OpenStreetMap"
+  });
+}
+
+function normalizeClinic(element, originLatitude, originLongitude) {
+  const latitude = finiteNumber(element?.lat ?? element?.center?.lat);
+  const longitude = finiteNumber(element?.lon ?? element?.center?.lon);
+  if (latitude === null || longitude === null) return null;
+
+  const tags = element.tags || {};
+  const street = cleanText(tags["addr:street"]);
+  const number = cleanText(tags["addr:housenumber"]);
+  const neighborhood = cleanText(tags["addr:suburb"] || tags["addr:neighbourhood"]);
+  const city = cleanText(tags["addr:city"] || tags["addr:municipality"]);
+  const address = [street && number ? `${street}, ${number}` : street || number, neighborhood, city].filter(Boolean).join(" · ");
+  const phone = cleanText(tags["contact:phone"] || tags.phone || tags["contact:mobile"]).split(/[;|]/)[0].trim();
+  const openingHours = cleanText(tags.opening_hours);
+  const services = ["Veterinária"];
+  if (tags.emergency === "yes") services.push("Emergência");
+  if (openingHours) services.push("Horário informado");
+
+  return {
+    key: `${element.type}-${element.id}`,
+    id: `${element.type}-${element.id}`,
+    name: cleanText(tags.name || tags.operator) || "Clínica veterinária",
+    address: address || "Endereço não informado no mapa",
+    neighborhood,
+    city,
+    phone,
+    website: cleanText(tags["contact:website"] || tags.website),
+    openingHours,
+    emergency: tags.emergency === "yes",
+    services,
+    latitude,
+    longitude,
+    distance: haversineDistance(originLatitude, originLongitude, latitude, longitude)
+  };
+}
+
+function haversineDistance(fromLatitude, fromLongitude, toLatitude, toLongitude) {
+  const earthRadiusKm = 6371;
+  const toRadians = (degrees) => (degrees * Math.PI) / 180;
+  const latitudeDelta = toRadians(toLatitude - fromLatitude);
+  const longitudeDelta = toRadians(toLongitude - fromLongitude);
+  const value =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(toRadians(fromLatitude)) * Math.cos(toRadians(toLatitude)) * Math.sin(longitudeDelta / 2) ** 2;
+  return Number((earthRadiusKm * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value))).toFixed(2));
+}
+
+async function fetchExternalJson(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), EXTERNAL_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        Accept: "application/json",
+        "User-Agent": EXTERNAL_USER_AGENT,
+        ...(options.headers || {})
+      },
+      signal: controller.signal
+    });
+    if (!response.ok) throw httpError(502, `Servico externo indisponivel (${response.status}).`);
+    return await response.json();
+  } catch (error) {
+    if (error.name === "AbortError") throw httpError(504, "A consulta externa demorou demais.");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function finiteNumber(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 async function registerUser(response, body) {
@@ -224,8 +418,11 @@ async function saveWalletState(user, incomingState, clientUpdatedAt) {
     );
 
     await client.query(
-      `INSERT INTO pet_owners (user_id, name, cpf, phone, email, address, neighborhood, city, state, zip_code, emergency_name, emergency_phone)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO pet_owners (
+        user_id, name, cpf, phone, email, address, address_number, address_complement,
+        neighborhood, city, state, zip_code, latitude, longitude, emergency_name, emergency_phone
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        ON CONFLICT (user_id)
        DO UPDATE SET
         name = EXCLUDED.name,
@@ -233,10 +430,14 @@ async function saveWalletState(user, incomingState, clientUpdatedAt) {
         phone = EXCLUDED.phone,
         email = EXCLUDED.email,
         address = EXCLUDED.address,
+        address_number = EXCLUDED.address_number,
+        address_complement = EXCLUDED.address_complement,
         neighborhood = EXCLUDED.neighborhood,
         city = EXCLUDED.city,
         state = EXCLUDED.state,
         zip_code = EXCLUDED.zip_code,
+        latitude = EXCLUDED.latitude,
+        longitude = EXCLUDED.longitude,
         emergency_name = EXCLUDED.emergency_name,
         emergency_phone = EXCLUDED.emergency_phone`,
       [
@@ -246,10 +447,14 @@ async function saveWalletState(user, incomingState, clientUpdatedAt) {
         cleanText(owner.phone),
         cleanText(owner.email),
         cleanText(owner.address),
+        cleanText(owner.addressNumber),
+        cleanText(owner.addressComplement),
         cleanText(owner.neighborhood),
         cleanText(owner.city),
         cleanText(owner.state),
         cleanText(owner.zipCode),
+        finiteNumber(owner.latitude),
+        finiteNumber(owner.longitude),
         cleanText(owner.emergencyName),
         cleanText(owner.emergencyPhone)
       ]
@@ -530,13 +735,18 @@ async function readJson(request) {
 
 function serveStatic(url, response, headOnly = false) {
   const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
-  if (!STATIC_FILES.has(url.pathname) && !STATIC_FILES.has(pathname)) {
+  const extraFilePath = EXTRA_STATIC_FILES.get(url.pathname) || EXTRA_STATIC_FILES.get(pathname);
+  if (!extraFilePath && !STATIC_FILES.has(url.pathname) && !STATIC_FILES.has(pathname)) {
     return sendText(response, 404, "Arquivo nao encontrado.");
   }
 
   const publicRoot = path.resolve(PUBLIC_DIR);
-  const filePath = path.resolve(publicRoot, pathname.replace(/^\/+/, ""));
-  if (!filePath.startsWith(publicRoot)) return sendText(response, 403, "Acesso negado.");
+  const extraRoot = path.resolve(PROJECT_DIR, "tcc_screenshots_mobile");
+  const filePath = extraFilePath
+    ? path.resolve(extraFilePath)
+    : path.resolve(publicRoot, pathname.replace(/^\/+/, ""));
+  const allowedRoot = extraFilePath ? extraRoot : publicRoot;
+  if (!filePath.startsWith(allowedRoot)) return sendText(response, 403, "Acesso negado.");
 
   fs.stat(filePath, (error, stats) => {
     if (error || !stats.isFile()) return sendText(response, 404, "Arquivo nao encontrado.");

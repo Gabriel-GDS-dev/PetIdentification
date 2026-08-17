@@ -114,9 +114,14 @@ http://127.0.0.1:5241/
 
 - Carteira animal com frente e verso inspirada nos exemplos enviados.
 - Edição completa dos dados do pet.
+- Preenchimento automático de rua, bairro, cidade e estado pelo CEP com ViaCEP.
+- Campo manual somente para número e complemento do endereço.
+- Veterinárias reais próximas usando GPS do tutor e dados do OpenStreetMap.
 - Upload de foto do pet.
 - Assinatura digital no próprio app.
 - Download da carteira em PDF.
 - Cadastro e login via API com senha em hash.
 - Sincronização offline/online com PostgreSQL.
 - Manifest e service worker para PWA.
+
+As consultas de veterinárias usam a localização somente quando o tutor autoriza. O CEP é usado como alternativa. As integrações públicas respeitam a atribuição e os limites de uso do ViaCEP e do OpenStreetMap.

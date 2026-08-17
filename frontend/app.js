@@ -2,6 +2,10 @@ const STORAGE_KEY = "pet-id-wallet-state-v1";
 const APP_NAME = "Identificação Pet";
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
+const WALLET_TEMPLATE_IMAGES = {
+  front: "../tcc_screenshots_mobile/Frente.png",
+  back: "../tcc_screenshots_mobile/Verso.png"
+};
 
 const now = new Date();
 const todayISO = toISODate(now);
@@ -34,11 +38,16 @@ const defaultState = {
     cpf: "123.456.789-00",
     phone: "(11) 98888-2026",
     email: "gabriela@email.com",
-    address: "Rua das Palmeiras, 240",
+    address: "Rua das Palmeiras",
+    addressNumber: "240",
+    addressComplement: "",
     neighborhood: "Centro",
     city: "São Paulo",
     state: "SP",
     zipCode: "01000-000",
+    latitude: "",
+    longitude: "",
+    locationSource: "",
     emergencyName: "Marcos Souza",
     emergencyPhone: "(11) 97777-1010"
   },
@@ -160,45 +169,6 @@ const views = [
   { id: "clinics", label: "Vets", icon: "⌖" }
 ];
 
-const clinicSeed = [
-  {
-    name: "Clínica Vida Animal",
-    neighborhood: "Centro",
-    city: "São Paulo",
-    phone: "(11) 3344-2211",
-    services: ["Vacinas", "Atestado", "Emergência"],
-    distance: 1.4,
-    open: "Aberta até 21h"
-  },
-  {
-    name: "PetCare Centro",
-    neighborhood: "Bela Vista",
-    city: "São Paulo",
-    phone: "(11) 3122-9090",
-    services: ["Vacinas", "Exames", "Internação"],
-    distance: 2.1,
-    open: "Aberta até 20h"
-  },
-  {
-    name: "Vet Popular",
-    neighborhood: "Liberdade",
-    city: "São Paulo",
-    phone: "(11) 2700-7740",
-    services: ["Consulta", "Vacinas", "Microchip"],
-    distance: 3.6,
-    open: "Fecha às 18h"
-  },
-  {
-    name: "Hospital Pet 24h",
-    neighborhood: "Vila Mariana",
-    city: "São Paulo",
-    phone: "(11) 4002-2525",
-    services: ["24h", "Emergência", "Cirurgia"],
-    distance: 5.2,
-    open: "24 horas"
-  }
-];
-
 let state = loadState();
 let deferredInstallPrompt = null;
 let petFilter = "all";
@@ -207,6 +177,11 @@ let searchTerm = "";
 let syncTimer = null;
 let syncing = false;
 let walletSlideIndex = 0;
+let nearbyClinics = [];
+let clinicsStatus = "idle";
+let clinicsError = "";
+let clinicLocationLabel = "";
+let cepLookupTimer = null;
 
 const app = document.querySelector("#app");
 const toast = document.querySelector("#toast");
@@ -283,6 +258,8 @@ document.addEventListener("click", (event) => {
   if (name === "sync-now") syncWithServer("manual");
   if (name === "reset-demo") resetDemo();
   if (name === "maps") openMaps(action.dataset.query);
+  if (name === "lookup-cep") lookupCep(action.closest("form"));
+  if (name === "refresh-clinics") loadNearbyClinics(true);
 });
 
 document.addEventListener("input", (event) => {
@@ -295,6 +272,15 @@ document.addEventListener("input", (event) => {
     state.travel.items[event.target.dataset.travelCheck] = event.target.checked;
     saveState();
     renderTravel();
+  }
+
+  if (event.target.matches("[data-cep-input]")) {
+    const digits = onlyDigits(event.target.value).slice(0, 8);
+    event.target.value = digits.replace(/^(\d{5})(\d)/, "$1-$2");
+    clearTimeout(cepLookupTimer);
+    if (digits.length === 8) {
+      cepLookupTimer = setTimeout(() => lookupCep(event.target.closest("form")), 450);
+    }
   }
 });
 
@@ -371,13 +357,25 @@ function mergeState(partial = {}) {
     auth: { ...defaultState.auth, ...(partial.auth || {}) },
     sync: { ...defaultState.sync, ...(partial.sync || {}) },
     users: Array.isArray(partial.users) ? partial.users : [],
-    owner: { ...defaultState.owner, ...(partial.owner || {}) },
+    owner: normalizeOwner(partial.owner),
     travel: {
       ...defaultState.travel,
       ...(partial.travel || {}),
       items: { ...defaultState.travel.items, ...((partial.travel || {}).items || {}) }
     }
   };
+}
+
+function normalizeOwner(partialOwner = {}) {
+  const owner = { ...defaultState.owner, ...(partialOwner || {}) };
+  if (!owner.addressNumber) {
+    const match = String(owner.address || "").match(/^(.*?),\s*(\d+[\w-]*)$/);
+    if (match) {
+      owner.address = match[1].trim();
+      owner.addressNumber = match[2].trim();
+    }
+  }
+  return owner;
 }
 
 function saveState(options = {}) {
@@ -575,6 +573,7 @@ function render() {
   applyTheme();
   app.innerHTML = isAuthenticated() ? layout(screenTemplate()) : authView();
   if (state.currentView === "wallet") requestAnimationFrame(() => setWalletSlide(walletSlideIndex, false));
+  if (state.currentView === "clinics" && clinicsStatus === "idle") requestAnimationFrame(() => loadNearbyClinics());
 }
 
 function applyTheme() {
@@ -1425,13 +1424,13 @@ function renderTravel() {
 }
 
 function clinicsView() {
-  const city = state.owner.city || "sua cidade";
-  const query = encodeURIComponent(`veterinária perto de ${ownerAddress()}`);
+  const address = ownerAddress();
+  const query = encodeURIComponent(`veterinária perto de ${address || state.owner.city || "mim"}`);
   return `
     <div class="page-head">
-      <span class="eyebrow">Perto de casa</span>
+      <span class="eyebrow">Localização do tutor</span>
       <h1>Veterinárias próximas</h1>
-      <p class="muted">Busca orientada pelo endereço do tutor e atalhos para atendimento, vacina e viagem.</p>
+      <p class="muted">Clínicas reais encontradas perto da sua localização atual ou do CEP cadastrado.</p>
     </div>
     <div class="map-strip" aria-hidden="true">
       <span class="map-pin" style="left: 16%; top: 48%;"><span>⌂</span></span>
@@ -1443,22 +1442,131 @@ function clinicsView() {
         <div class="profile-strip">
           <div class="owner-avatar">${initials(state.owner.name)}</div>
           <div>
-            <h2>${escapeHTML(ownerAddress())}</h2>
-            <p class="muted small">Endereço usado como referência para ${escapeHTML(city)}.</p>
+            <h2>${escapeHTML(address || "Endereço ainda não cadastrado")}</h2>
+            <p class="muted small">${escapeHTML(clinicLocationLabel || "O app pedirá acesso à localização e usará o CEP como alternativa.")}</p>
           </div>
         </div>
         <div class="button-row" style="margin-top: 14px;">
-          <button class="primary-button" type="button" data-action="maps" data-query="${query}">Abrir no mapa</button>
+          <button class="primary-button" type="button" data-action="refresh-clinics">⌖ Atualizar localização</button>
+          <button class="secondary-button" type="button" data-action="maps" data-query="${query}">Abrir no mapa</button>
           <button class="secondary-button" type="button" data-action="edit-owner">Editar endereço</button>
         </div>
       </div>
     </section>
-    <section class="section">
-      <div class="grid two">
-        ${clinicSeed.map((clinic) => clinicCard(clinic)).join("")}
-      </div>
+    <section class="section" id="clinicsList" aria-live="polite">
+      ${clinicsListTemplate()}
     </section>
   `;
+}
+
+function clinicsListTemplate() {
+  if (clinicsStatus === "loading" || clinicsStatus === "idle") {
+    return `
+      <div class="card location-status-card">
+        <span class="location-spinner" aria-hidden="true"></span>
+        <div>
+          <h2>Buscando veterinárias próximas</h2>
+          <p class="muted small">Consultando sua localização e os dados do OpenStreetMap.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  if (clinicsStatus === "error") {
+    return `
+      <div class="empty-state">
+        <span class="empty-icon">⌖</span>
+        <div>
+          <h2>Não foi possível localizar as veterinárias</h2>
+          <p class="muted">${escapeHTML(clinicsError || "Confira o CEP ou permita o acesso à localização.")}</p>
+        </div>
+        <div class="button-row">
+          <button class="primary-button" type="button" data-action="refresh-clinics">Tentar novamente</button>
+          <button class="secondary-button" type="button" data-action="edit-owner">Conferir CEP</button>
+        </div>
+      </div>
+    `;
+  }
+
+  if (!nearbyClinics.length) {
+    return emptyState("⌖", "Nenhuma veterinária encontrada", "Não encontramos locais cadastrados em um raio de 12 km. Tente atualizar a localização.", "Tentar novamente", "refresh-clinics");
+  }
+
+  return `
+    <div class="section-title">
+      <div>
+        <h2>${nearbyClinics.length} veterinária${nearbyClinics.length === 1 ? "" : "s"} por perto</h2>
+        <p class="muted small">Ordenadas pela distância em linha reta.</p>
+      </div>
+    </div>
+    <div class="grid two">${nearbyClinics.map((clinic) => clinicCard(clinic)).join("")}</div>
+    <p class="map-attribution">Dados © colaboradores do OpenStreetMap</p>
+  `;
+}
+
+function renderClinicsList() {
+  const target = document.querySelector("#clinicsList");
+  if (target) target.innerHTML = clinicsListTemplate();
+}
+
+async function loadNearbyClinics(force = false) {
+  if (clinicsStatus === "loading") return;
+  if (!force && clinicsStatus === "loaded") return;
+
+  clinicsStatus = "loading";
+  clinicsError = "";
+  renderClinicsList();
+
+  try {
+    const location = await resolveTutorLocation();
+    clinicLocationLabel = location.source === "gps" ? "Usando a localização atual do celular." : `Usando o endereço do CEP ${state.owner.zipCode || "cadastrado"}.`;
+    const payload = await apiRequest(
+      `/api/clinics/nearby?lat=${encodeURIComponent(location.latitude)}&lon=${encodeURIComponent(location.longitude)}&radius=12000`
+    );
+    nearbyClinics = Array.isArray(payload.clinics) ? payload.clinics : [];
+    clinicsStatus = "loaded";
+  } catch (error) {
+    nearbyClinics = [];
+    clinicsStatus = "error";
+    clinicsError = error.message || "Não foi possível consultar a localização.";
+  }
+
+  if (state.currentView === "clinics") {
+    const description = document.querySelector(".profile-strip .muted");
+    if (description && clinicLocationLabel) description.textContent = clinicLocationLabel;
+    renderClinicsList();
+  }
+}
+
+async function resolveTutorLocation() {
+  if (navigator.geolocation && window.isSecureContext) {
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 12000,
+          maximumAge: 5 * 60 * 1000
+        });
+      });
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+      state.owner.latitude = latitude;
+      state.owner.longitude = longitude;
+      state.owner.locationSource = "gps";
+      saveState();
+      return { latitude, longitude, source: "gps" };
+    } catch {
+      // O CEP cadastrado é usado quando o tutor não autoriza ou o GPS está indisponível.
+    }
+  }
+
+  const latitude = Number(state.owner.latitude);
+  const longitude = Number(state.owner.longitude);
+  if (Number.isFinite(latitude) && Number.isFinite(longitude) && (latitude || longitude)) {
+    return { latitude, longitude, source: state.owner.locationSource || "cep" };
+  }
+
+  throw new Error("Permita a localização do celular ou cadastre um CEP válido nos dados do tutor.");
 }
 
 function settingsView() {
@@ -1655,23 +1763,27 @@ function documentItem(doc) {
 }
 
 function clinicCard(clinic) {
-  const query = encodeURIComponent(`${clinic.name} ${clinic.neighborhood} ${clinic.city}`);
+  const query = encodeURIComponent(`${clinic.latitude},${clinic.longitude}`);
+  const distance = Number(clinic.distance || 0);
+  const statusLabel = clinic.emergency ? "Emergência" : clinic.openingHours || "Horário não informado";
+  const website = safeExternalUrl(clinic.website);
   return `
     <article class="clinic-card">
       <div class="clinic-top">
         <div>
           <h3>${escapeHTML(clinic.name)}</h3>
-          <p class="muted small">${escapeHTML(clinic.neighborhood)}, ${escapeHTML(clinic.city)}</p>
+          <p class="muted small">${escapeHTML(clinic.address || "Endereço não informado")}</p>
         </div>
-        <span class="pill ok">${escapeHTML(clinic.open)}</span>
+        <span class="pill ${clinic.emergency ? "danger" : "ok"}">${escapeHTML(statusLabel)}</span>
       </div>
       <div class="inline-meta">
-        <span class="pill">${clinic.distance.toFixed(1).replace(".", ",")} km</span>
-        ${clinic.services.map((service) => `<span class="pill">${escapeHTML(service)}</span>`).join("")}
+        <span class="pill">${distance.toFixed(1).replace(".", ",")} km</span>
+        ${(clinic.services || []).map((service) => `<span class="pill">${escapeHTML(service)}</span>`).join("")}
       </div>
       <div class="button-row">
-        <a class="secondary-button" href="tel:${onlyDigits(clinic.phone)}">${clinic.phone}</a>
-        <button class="primary-button" type="button" data-action="maps" data-query="${query}">Mapa</button>
+        ${clinic.phone ? `<a class="secondary-button" href="tel:${onlyDigits(clinic.phone)}">Ligar</a>` : ""}
+        ${website ? `<a class="secondary-button" href="${escapeHTML(website)}" target="_blank" rel="noopener noreferrer">Site</a>` : ""}
+        <button class="primary-button" type="button" data-action="maps" data-query="${query}">Ver rota</button>
       </div>
     </article>
   `;
@@ -1814,7 +1926,10 @@ function openPetModal(id = "") {
 function openOwnerModal() {
   openModal(`
     <div class="modal-head">
-      <h2>Dados do tutor</h2>
+      <div>
+        <h2>Dados do tutor</h2>
+        <p class="muted small">Informe o CEP; rua, bairro, cidade e estado serão preenchidos automaticamente.</p>
+      </div>
       <button class="icon-button" type="button" data-action="close-modal" aria-label="Fechar">×</button>
     </div>
     <div class="modal-body">
@@ -1824,11 +1939,38 @@ function openOwnerModal() {
           ${field("CPF", "cpf", state.owner.cpf)}
           ${field("Telefone", "phone", state.owner.phone, "tel", true)}
           ${field("E-mail", "email", state.owner.email, "email")}
-          ${field("Endereço", "address", state.owner.address)}
-          ${field("Bairro", "neighborhood", state.owner.neighborhood)}
-          ${field("Cidade", "city", state.owner.city)}
-          ${field("Estado", "state", state.owner.state)}
-          ${field("CEP", "zipCode", state.owner.zipCode)}
+        </div>
+
+        <div class="form-section-head">
+          <h3>Endereço</h3>
+          <span>Preenchimento automático por CEP</span>
+        </div>
+        <div class="cep-lookup-row">
+          <div class="field">
+            <label for="zipCode">CEP</label>
+            <input id="zipCode" name="zipCode" inputmode="numeric" autocomplete="postal-code" value="${escapeHTML(state.owner.zipCode)}" data-cep-input required />
+          </div>
+          <button class="secondary-button" type="button" data-action="lookup-cep">Buscar CEP</button>
+        </div>
+        <p class="cep-status muted small" data-cep-status>Digite os 8 números do CEP.</p>
+
+        <div class="form-grid two">
+          ${readonlyField("Rua", "address", state.owner.address)}
+          ${field("Número", "addressNumber", state.owner.addressNumber, "text", true)}
+          ${field("Complemento", "addressComplement", state.owner.addressComplement)}
+          ${readonlyField("Bairro", "neighborhood", state.owner.neighborhood)}
+          ${readonlyField("Cidade", "city", state.owner.city)}
+          ${readonlyField("Estado", "state", state.owner.state)}
+          <input type="hidden" name="latitude" value="${escapeHTML(state.owner.latitude)}" />
+          <input type="hidden" name="longitude" value="${escapeHTML(state.owner.longitude)}" />
+          <input type="hidden" name="locationSource" value="${escapeHTML(state.owner.locationSource)}" />
+        </div>
+
+        <div class="form-section-head">
+          <h3>Emergência</h3>
+          <span>Contato exibido na identificação do pet</span>
+        </div>
+        <div class="form-grid two">
           ${field("Contato de emergência", "emergencyName", state.owner.emergencyName)}
           ${field("Telefone de emergência", "emergencyPhone", state.owner.emergencyPhone, "tel")}
         </div>
@@ -1836,6 +1978,45 @@ function openOwnerModal() {
       </form>
     </div>
   `);
+}
+
+async function lookupCep(form) {
+  if (!form) return;
+  const input = form.querySelector("[name='zipCode']");
+  const status = form.querySelector("[data-cep-status]");
+  const button = form.querySelector("[data-action='lookup-cep']");
+  const cep = onlyDigits(input?.value || "");
+
+  if (cep.length !== 8) {
+    if (status) status.textContent = "Informe um CEP com 8 números.";
+    return;
+  }
+
+  if (button) button.disabled = true;
+  if (status) status.textContent = "Buscando endereço...";
+
+  try {
+    const address = await apiRequest(`/api/address/cep?cep=${cep}`);
+    setFormValue(form, "zipCode", address.zipCode || cep.replace(/^(\d{5})(\d{3})$/, "$1-$2"));
+    setFormValue(form, "address", address.address);
+    setFormValue(form, "neighborhood", address.neighborhood);
+    setFormValue(form, "city", address.city);
+    setFormValue(form, "state", address.state);
+    setFormValue(form, "latitude", address.latitude ?? "");
+    setFormValue(form, "longitude", address.longitude ?? "");
+    setFormValue(form, "locationSource", "cep");
+    if (status) status.textContent = "Endereço encontrado. Agora informe somente número e complemento.";
+    form.querySelector("[name='addressNumber']")?.focus();
+  } catch (error) {
+    if (status) status.textContent = error.message || "Não foi possível consultar o CEP.";
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function setFormValue(form, name, value) {
+  const input = form.querySelector(`[name='${name}']`);
+  if (input) input.value = value ?? "";
 }
 
 function openVaccineModal(petId = "") {
@@ -2274,10 +2455,15 @@ function blankOwner(user = {}) {
     phone: user.phone || "",
     email: user.email || "",
     address: "",
+    addressNumber: "",
+    addressComplement: "",
     neighborhood: "",
     city: "",
     state: "",
     zipCode: "",
+    latitude: "",
+    longitude: "",
+    locationSource: "",
     emergencyName: "",
     emergencyPhone: ""
   };
@@ -2335,6 +2521,9 @@ async function handleForm(form) {
 
   if (type === "owner") {
     state.owner = { ...state.owner, ...data };
+    clinicsStatus = "idle";
+    nearbyClinics = [];
+    clinicLocationLabel = "";
     notify("Dados do tutor atualizados.");
   }
 
@@ -2468,14 +2657,14 @@ function imageFileToDataUrl(file, maxSize = 900) {
 }
 
 async function renderWalletCanvas(pet, side) {
+  const template = await loadCanvasImage(WALLET_TEMPLATE_IMAGES[side]);
   const canvas = document.createElement("canvas");
-  canvas.width = 1600;
-  canvas.height = 1000;
+  canvas.width = template.naturalWidth || template.width;
+  canvas.height = template.naturalHeight || template.height;
   const context = canvas.getContext("2d");
   const doc = walletPdfData(pet);
 
-  drawRoundedRect(context, 0, 0, canvas.width, canvas.height, 0, "#147a62");
-  drawRoundedRect(context, 0, 210, canvas.width, 790, 0, "#47b84c");
+  context.drawImage(template, 0, 0, canvas.width, canvas.height);
 
   if (side === "front") {
     await drawWalletFront(context, pet, doc);
@@ -2487,6 +2676,45 @@ async function renderWalletCanvas(pet, side) {
 }
 
 async function drawWalletFront(context, pet, doc) {
+  await drawWalletPhoto(context, pet, 48, 193, 327, 389, 8);
+
+  drawWalletFieldValue(context, pet.name, 412, 228, 850, { size: 28, minSize: 17, weight: 800 });
+  drawWalletFieldValue(context, formatDate(pet.birthDate), 412, 318, 274, { size: 23 });
+  drawWalletFieldValue(context, pet.species, 704, 318, 274, { size: 23 });
+  drawWalletFieldValue(context, pet.sex, 995, 318, 250, { size: 23 });
+  drawWalletFieldValue(context, pet.breed, 412, 410, 420, { size: 23 });
+  drawWalletFieldValue(context, pet.color, 849, 410, 410, { size: 23 });
+  drawWalletFieldValue(context, doc.documentNumber, 412, 500, 420, { size: 23 });
+  drawWalletFieldValue(context, pet.microchip, 849, 500, 410, { size: 23 });
+  drawWalletFieldValue(context, doc.ownerName, 412, 590, 850, { size: 24, minSize: 15, weight: 800 });
+  drawWalletFieldValue(context, doc.vaccineText, 650, 669, 590, {
+    size: 21,
+    minSize: 13,
+    color: doc.vaccineColor,
+    uppercase: false
+  });
+  drawWalletFieldValue(context, doc.documentNumber, 56, 757, 320, {
+    align: "center",
+    size: 18,
+    minSize: 12
+  });
+
+  if (pet.signature) {
+    await drawDataImage(context, pet.signature, 78, 612, 270, 48, false);
+  } else {
+    drawFittedText(context, doc.ownerName, 212, 652, 300, {
+      align: "center",
+      color: "#173c35",
+      family: "Georgia, serif",
+      size: 24,
+      minSize: 14,
+      style: "italic",
+      uppercase: false
+    });
+  }
+
+  return;
+
   drawText(context, "REPÚBLICA FEDERATIVA DOS ANIMAIS", 800, 270, {
     align: "center",
     color: "#dff6eb",
@@ -2527,6 +2755,66 @@ async function drawWalletFront(context, pet, doc) {
 }
 
 async function drawWalletBack(context, pet, doc) {
+  const cover = (x, y, width, height) => coverWalletText(context, x, y, width, height);
+
+  cover(36, 208, 470, 33);
+  cover(523, 208, 470, 33);
+  cover(36, 295, 470, 33);
+  cover(523, 295, 470, 33);
+  cover(36, 382, 957, 33);
+  cover(36, 470, 470, 33);
+  cover(523, 470, 470, 33);
+  cover(36, 558, 470, 33);
+  cover(523, 558, 470, 33);
+  coverWalletText(context, 51, 658, 920, 37, 8);
+  coverWalletText(context, 40, 738, 275, 38, 10);
+  coverWalletText(context, 453, 738, 420, 38, 10);
+  coverWalletText(context, 1042, 738, 220, 38, 10);
+
+  drawWalletFieldValue(context, doc.ownerName, 36, 232, 470, { size: 22, minSize: 14 });
+  drawWalletFieldValue(context, state.owner.cpf, 523, 232, 470, { size: 22, minSize: 14 });
+  drawWalletFieldValue(context, state.owner.phone, 36, 320, 470, { size: 22, minSize: 14 });
+  drawWalletFieldValue(context, state.owner.email, 523, 320, 470, {
+    size: 21,
+    minSize: 13,
+    uppercase: false
+  });
+  drawWalletFieldValue(context, doc.address, 36, 407, 957, { size: 20, minSize: 12 });
+  drawWalletFieldValue(context, state.owner.emergencyName, 36, 493, 470, { size: 22, minSize: 14 });
+  drawWalletFieldValue(context, state.owner.emergencyPhone, 523, 493, 470, { size: 22, minSize: 14 });
+  drawWalletFieldValue(context, pet.temperament, 36, 581, 470, { size: 21, minSize: 13 });
+  drawWalletFieldValue(context, pet.allergies, 523, 581, 470, { size: 21, minSize: 13 });
+  wrapCanvasText(context, walletCardText(pet.notes, "Sem observacoes cadastradas.", false), 55, 681, 900, 24, {
+    color: "#173731",
+    font: "700 19px Arial",
+    maxLines: 2
+  });
+
+  drawWalletQr(context, doc.qrText, 1068, 313, 201);
+  drawFittedText(context, `EMITIDA EM ${doc.issuedAt}`, 58, 763, 250, {
+    color: "#122b29",
+    size: 21,
+    minSize: 13,
+    weight: 500,
+    uppercase: false
+  });
+  drawFittedText(context, `${pet.name || "Pet"} - ${doc.documentNumber}`, 663, 763, 390, {
+    align: "center",
+    color: "#122b29",
+    size: 20,
+    minSize: 12,
+    weight: 800
+  });
+  drawFittedText(context, "DOCUMENTO DIGITAL", 1152, 763, 205, {
+    align: "center",
+    color: "#122b29",
+    size: 19,
+    minSize: 12,
+    weight: 800
+  });
+
+  return;
+
   drawText(context, "🐾🐾🐾🐾🐾🐾🐾🐾🐾🐾🐾", 800, 270, { align: "center", color: "#167c61", font: "24px Arial" });
   drawRoundedRect(context, 52, 330, 1496, 56, 0, "#ffffff");
   drawText(context, "VÁLIDO EM TODO TERRITÓRIO NACIONAL", 800, 367, {
@@ -2541,7 +2829,7 @@ async function drawWalletBack(context, pet, doc) {
     ["NASCIMENTO", formatDate(pet.birthDate), "NATURAL DE", state.owner.city],
     ["ESPÉCIE", pet.species, "COR", pet.color],
     ["SEXO", pet.sex, "CEP", state.owner.zipCode || ""],
-    ["ENDEREÇO", state.owner.address, "ESTADO", state.owner.state],
+    ["ENDEREÇO", [state.owner.address, state.owner.addressNumber].filter(Boolean).join(", "), "ESTADO", state.owner.state],
     ["BAIRRO", state.owner.neighborhood, "TEL. CEL.", state.owner.phone],
     ["CIDADE", state.owner.city, "MICROCHIP", pet.microchip],
     ["E-MAIL", state.owner.email, "REGISTRO", doc.documentNumber]
@@ -2563,10 +2851,163 @@ async function drawWalletBack(context, pet, doc) {
 }
 
 function walletPdfData(pet) {
+  const nextVaccine = getVaccines(pet.id)[0];
+  const status = nextVaccine ? vaccineStatus(nextVaccine) : { type: "warn", label: "Sem vacinas" };
   return {
     documentNumber: pet.registry || `PET-${pet.id.slice(-6).toUpperCase()}`,
-    ownerName: state.owner.name || "Tutor"
+    ownerName: state.owner.name || "Tutor",
+    issuedAt: formatDate(todayISO),
+    address: ownerAddress(),
+    vaccineText: nextVaccine ? `${nextVaccine.name} - ${status.label}` : status.label,
+    vaccineColor: status.type === "danger" ? "#a12f38" : status.type === "warn" ? "#8c5a0f" : "#226b43",
+    qrText: `${pet.registry || pet.id}-${pet.microchip || ""}-${state.owner.phone || ""}`
   };
+}
+
+function loadCanvasImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`Nao foi possivel carregar ${src}`));
+    image.src = src;
+  });
+}
+
+async function drawWalletPhoto(context, pet, x, y, width, height, radius = 8) {
+  if (pet.photo) {
+    await drawDataImageClipped(context, pet.photo, x, y, width, height, radius, true);
+    return;
+  }
+
+  drawRoundedRect(context, x, y, width, height, radius, "#d8eee1");
+  drawGrid(context, x, y, width, height, "#44c9a4");
+  drawFittedText(context, canvasInitials(pet.name), x + width / 2, y + height / 2 + 30, width - 40, {
+    align: "center",
+    color: "#ffffff",
+    size: 88,
+    minSize: 44,
+    weight: 900
+  });
+}
+
+function drawWalletFieldValue(context, value, x, y, maxWidth, options = {}) {
+  drawFittedText(context, walletCardText(value, options.fallback, options.uppercase !== false), x, y, maxWidth, {
+    color: options.color || "#173731",
+    size: options.size || 22,
+    minSize: options.minSize || 13,
+    weight: options.weight || 700,
+    align: options.align || "left",
+    uppercase: false
+  });
+}
+
+function walletCardText(value, fallback = "Nao informado", uppercase = true) {
+  const text = String(value || "").trim() || fallback;
+  return uppercase ? text.toLocaleUpperCase("pt-BR") : text;
+}
+
+function canvasInitials(name = "") {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  const letters = (parts[0]?.[0] || "P") + (parts.length > 1 ? parts.at(-1)[0] : "");
+  return letters.toLocaleUpperCase("pt-BR");
+}
+
+function drawFittedText(context, text, x, y, maxWidth, options = {}) {
+  const family = options.family || "Arial, sans-serif";
+  const style = options.style || "normal";
+  const weight = options.weight || 700;
+  const minSize = options.minSize || 12;
+  let size = options.size || 20;
+  const content = options.uppercase === false ? String(text || "") : walletCardText(text, "", true);
+
+  context.save();
+  context.fillStyle = options.color || "#173731";
+  context.textAlign = options.align || "left";
+  context.textBaseline = "alphabetic";
+
+  do {
+    context.font = `${style} ${weight} ${size}px ${family}`;
+    if (context.measureText(content).width <= maxWidth || size <= minSize) break;
+    size -= 1;
+  } while (size >= minSize);
+
+  context.fillText(trimCanvasText(context, content, maxWidth), x, y);
+  context.restore();
+}
+
+function trimCanvasText(context, text, maxWidth) {
+  const content = String(text || "");
+  if (context.measureText(content).width <= maxWidth) return content;
+
+  const suffix = "...";
+  let trimmed = content;
+  while (trimmed.length > 1 && context.measureText(`${trimmed}${suffix}`).width > maxWidth) {
+    trimmed = trimmed.slice(0, -1);
+  }
+  return `${trimmed.trimEnd()}${suffix}`;
+}
+
+function coverWalletText(context, x, y, width, height, radius = 4) {
+  context.save();
+  context.globalAlpha = 0.92;
+  drawRoundedRect(context, x, y, width, height, radius, "#eef7f1");
+  context.restore();
+}
+
+function drawWalletQr(context, text, x, y, size) {
+  const cells = 9;
+  const padding = 14;
+  const gap = 5;
+  const dot = (size - padding * 2 - gap * (cells - 1)) / cells;
+  const hash = [...String(text)].reduce((acc, char) => (acc * 31 + char.charCodeAt(0)) >>> 0, 7);
+
+  drawRoundedRect(context, x, y, size, size, 10, "#ffffff");
+
+  for (let index = 0; index < cells * cells; index += 1) {
+    const row = Math.floor(index / cells);
+    const col = index % cells;
+    const finder = (row < 3 && col < 3) || (row < 3 && col > 5) || (row > 5 && col < 3);
+    const on = finder || ((hash >> (index % 24)) + index * 11) % 3 === 0;
+    const cx = x + padding + col * (dot + gap) + dot / 2;
+    const cy = y + padding + row * (dot + gap) + dot / 2;
+
+    context.fillStyle = on ? "#6bded0" : "#d7e6e2";
+    context.beginPath();
+    context.arc(cx, cy, dot / 2, 0, Math.PI * 2);
+    context.fill();
+  }
+}
+
+function drawDataImageClipped(context, dataUrl, x, y, width, height, radius = 0, cover = false) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      context.save();
+      context.beginPath();
+      if (radius && typeof context.roundRect === "function") {
+        context.roundRect(x, y, width, height, radius);
+      } else {
+        context.rect(x, y, width, height);
+      }
+      context.clip();
+
+      if (cover) {
+        const scale = Math.max(width / image.width, height / image.height);
+        const sourceWidth = width / scale;
+        const sourceHeight = height / scale;
+        const sourceX = (image.width - sourceWidth) / 2;
+        const sourceY = (image.height - sourceHeight) / 2;
+        context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
+      } else {
+        context.drawImage(image, x, y, width, height);
+      }
+
+      context.restore();
+      resolve();
+    };
+    image.onerror = resolve;
+    image.src = safeImageSrc(dataUrl);
+  });
 }
 
 function drawLabelValue(context, label, value, x, y) {
@@ -2623,11 +3064,18 @@ function drawText(context, text, x, y, options = {}) {
 function wrapCanvasText(context, text, x, y, maxWidth, lineHeight, options = {}) {
   context.fillStyle = options.color || "#14302f";
   context.font = options.font || "18px Arial";
+  const maxLines = options.maxLines || Number.POSITIVE_INFINITY;
   const words = String(text || "").split(/\s+/);
   let line = "";
+  let lineCount = 0;
   for (const word of words) {
     const testLine = line ? `${line} ${word}` : word;
     if (context.measureText(testLine).width > maxWidth && line) {
+      lineCount += 1;
+      if (lineCount >= maxLines) {
+        context.fillText(trimCanvasText(context, `${line} ${word}`, maxWidth), x, y);
+        return;
+      }
       context.fillText(line, x, y);
       line = word;
       y += lineHeight;
@@ -2635,7 +3083,7 @@ function wrapCanvasText(context, text, x, y, maxWidth, lineHeight, options = {})
       line = testLine;
     }
   }
-  if (line) context.fillText(line, x, y);
+  if (line) context.fillText(trimCanvasText(context, line, maxWidth), x, y);
 }
 
 function drawDataImage(context, dataUrl, x, y, width, height, cover = false) {
@@ -2664,12 +3112,12 @@ function createPdfFromCanvases(canvases) {
   const pageHeight = 595;
   const margin = 28;
   const imageWidth = pageWidth - margin * 2;
-  const imageHeight = imageWidth * (1000 / 1600);
-  const imageY = (pageHeight - imageHeight) / 2;
   const objects = [];
   const pages = [];
 
   canvases.forEach((canvas, index) => {
+    const imageHeight = imageWidth * (canvas.height / canvas.width);
+    const imageY = (pageHeight - imageHeight) / 2;
     const imageData = canvas.toDataURL("image/jpeg", 0.92).split(",")[1];
     const imageObject = objects.push(
       `<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${base64ToBinary(imageData).length} >>\nstream\n${base64ToBinary(imageData)}\nendstream`
@@ -2764,7 +3212,9 @@ function travelProgress() {
 }
 
 function ownerAddress() {
-  return [state.owner.address, state.owner.neighborhood, state.owner.city, state.owner.state].filter(Boolean).join(", ");
+  const street = [state.owner.address, state.owner.addressNumber].filter(Boolean).join(", ");
+  const city = [state.owner.city, state.owner.state].filter(Boolean).join(" - ");
+  return [street, state.owner.addressComplement, state.owner.neighborhood, city, state.owner.zipCode].filter(Boolean).join(", ");
 }
 
 function field(label, name, value = "", type = "text", required = false) {
@@ -2846,6 +3296,15 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
 }
 
+function readonlyField(label, name, value = "") {
+  return `
+    <div class="field readonly-field">
+      <label for="${name}">${label}</label>
+      <input id="${name}" name="${name}" value="${escapeHTML(value)}" readonly aria-readonly="true" />
+    </div>
+  `;
+}
+
 function formatDateTime(value) {
   if (!value) return "Não informado";
   const date = new Date(value);
@@ -2876,6 +3335,15 @@ function safeImageSrc(value = "") {
   const text = String(value || "");
   if (text.startsWith("data:image/") || text.startsWith("./") || text.startsWith("/")) return text;
   return "";
+}
+
+function safeExternalUrl(value = "") {
+  try {
+    const url = new URL(String(value || ""));
+    return ["http:", "https:"].includes(url.protocol) ? url.toString() : "";
+  } catch {
+    return "";
+  }
 }
 
 function slugify(value = "") {
