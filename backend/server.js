@@ -10,9 +10,17 @@ const HOST = process.env.HOST || "0.0.0.0";
 const SESSION_SECRET = process.env.SESSION_SECRET || "pet-identification-dev-secret";
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 const EXTERNAL_REQUEST_TIMEOUT_MS = 22000;
+const OVERPASS_REQUEST_TIMEOUT_MS = 12000;
 const OVERPASS_API_URL = process.env.OVERPASS_API_URL || "https://overpass-api.de/api/interpreter";
+const OVERPASS_API_URLS = (process.env.OVERPASS_API_URLS
+  ? process.env.OVERPASS_API_URLS.split(/[,\s]+/)
+  : [OVERPASS_API_URL, "https://overpass.kumi.systems/api/interpreter", "https://lz4.overpass-api.de/api/interpreter"]
+).filter(Boolean);
 const GEOCODING_API_URL = process.env.GEOCODING_API_URL || "https://nominatim.openstreetmap.org/search";
 const EXTERNAL_USER_AGENT = "PetIdentification/1.0 (local pet wallet application)";
+const DEFAULT_CLINIC_RADIUS = 12000;
+const CLINIC_SEARCH_RADII = [DEFAULT_CLINIC_RADIUS, 25000, 50000];
+const MAX_CLINIC_RADIUS = CLINIC_SEARCH_RADII[CLINIC_SEARCH_RADII.length - 1];
 const geocodeCache = new Map();
 let lastGeocodeRequestAt = 0;
 
@@ -158,42 +166,71 @@ async function handleApi(request, response, url) {
 }
 
 async function lookupAddressByCep(response, rawCep) {
-  const cep = cleanText(rawCep).replace(/\D/g, "");
-  if (!/^\d{8}$/.test(cep)) {
-    return sendJson(response, 400, { error: "Informe um CEP com 8 digitos." });
+  let address;
+  try {
+    address = await lookupCepAddress(rawCep);
+  } catch (error) {
+    if (error.statusCode) return sendJson(response, error.statusCode, { error: error.message });
+    throw error;
   }
 
-  const [viaCep, brasilApi] = await Promise.all([
+  return sendJson(response, 200, address);
+}
+
+async function lookupCepAddress(rawCep) {
+  const cep = cleanText(rawCep).replace(/\D/g, "");
+  if (!/^\d{8}$/.test(cep)) {
+    throw httpError(400, "Informe um CEP com 8 digitos.");
+  }
+
+  const [viaCepResult, brasilApiResult] = await Promise.allSettled([
     fetchExternalJson(`https://viacep.com.br/ws/${cep}/json/`),
     fetchExternalJson(`https://brasilapi.com.br/api/cep/v2/${cep}`).catch(() => null)
   ]);
+  const viaCep = viaCepResult.status === "fulfilled" ? viaCepResult.value : null;
+  const brasilApi = brasilApiResult.status === "fulfilled" ? brasilApiResult.value : null;
 
-  if (viaCep?.erro) return sendJson(response, 404, { error: "CEP nao encontrado." });
+  if (viaCep?.erro && !brasilApi) throw httpError(404, "CEP nao encontrado.");
+  if (!viaCep && !brasilApi) throw httpError(502, "Servicos de CEP indisponiveis.");
+
+  const addressData = {
+    zipCode: viaCep?.cep || formatCep(brasilApi?.cep || cep),
+    address: viaCep?.logradouro || brasilApi?.street || "",
+    neighborhood: viaCep?.bairro || brasilApi?.neighborhood || "",
+    city: viaCep?.localidade || brasilApi?.city || "",
+    state: viaCep?.uf || brasilApi?.state || "",
+    ibge: viaCep?.ibge || ""
+  };
 
   const coordinates = brasilApi?.location?.coordinates || {};
   let latitude = finiteNumber(coordinates.latitude);
   let longitude = finiteNumber(coordinates.longitude);
   if (latitude === null || longitude === null) {
-    const geocoded = await geocodePublicAddress(viaCep).catch(() => null);
+    const geocoded = await geocodePublicAddress(addressData).catch(() => null);
     latitude = geocoded?.latitude ?? null;
     longitude = geocoded?.longitude ?? null;
   }
 
-  return sendJson(response, 200, {
-    zipCode: viaCep.cep || cep,
-    address: viaCep.logradouro || brasilApi?.street || "",
-    neighborhood: viaCep.bairro || brasilApi?.neighborhood || "",
-    city: viaCep.localidade || brasilApi?.city || "",
-    state: viaCep.uf || brasilApi?.state || "",
-    ibge: viaCep.ibge || "",
+  return {
+    ...addressData,
     latitude,
     longitude
-  });
+  };
 }
 
 async function geocodePublicAddress(address) {
-  const query = [address.logradouro, address.bairro, address.localidade, address.uf, "Brasil"].filter(Boolean).join(", ");
-  if (!query) return null;
+  const queries = buildGeocodeQueries(address);
+  if (!queries.length) return null;
+
+  for (const query of queries) {
+    const result = await geocodePublicQuery(query);
+    if (hasValidCoordinates(result?.latitude, result?.longitude)) return result;
+  }
+
+  return null;
+}
+
+async function geocodePublicQuery(query) {
   const key = query.toLocaleLowerCase("pt-BR");
   if (geocodeCache.has(key)) return geocodeCache.get(key);
 
@@ -205,7 +242,6 @@ async function geocodePublicAddress(address) {
   url.searchParams.set("q", query);
   url.searchParams.set("format", "jsonv2");
   url.searchParams.set("limit", "1");
-  url.searchParams.set("countrycodes", "br");
 
   const payload = await fetchExternalJson(url.toString());
   const first = Array.isArray(payload) ? payload[0] : null;
@@ -217,29 +253,77 @@ async function geocodePublicAddress(address) {
 }
 
 async function findNearbyClinics(response, searchParams) {
-  const latitude = finiteNumber(searchParams.get("lat"));
-  const longitude = finiteNumber(searchParams.get("lon"));
-  const requestedRadius = finiteNumber(searchParams.get("radius")) || 12000;
-  const radius = Math.max(1000, Math.min(20000, requestedRadius));
+  const requestedRadius = finiteNumber(searchParams.get("radius")) || DEFAULT_CLINIC_RADIUS;
+  const origin = await resolveClinicOrigin(searchParams);
 
-  if (latitude === null || latitude < -90 || latitude > 90 || longitude === null || longitude < -180 || longitude > 180) {
-    return sendJson(response, 400, { error: "Localizacao do tutor invalida." });
+  if (!origin) {
+    return sendJson(response, 400, { error: "Informe a localizacao do celular, um CEP valido ou um endereco completo do tutor." });
   }
 
-  const query = `
-    [out:json][timeout:18];
-    (
-      nwr["amenity"="veterinary"](around:${Math.round(radius)},${latitude},${longitude});
-      nwr["healthcare"="veterinary"](around:${Math.round(radius)},${latitude},${longitude});
-    );
-    out center tags 40;
-  `;
+  let clinics = [];
+  let radius = clinicSearchRadii(requestedRadius)[0];
+  const radii = clinicSearchRadii(requestedRadius);
+  let overpassError = null;
 
-  const payload = await fetchExternalJson(OVERPASS_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
-    body: new URLSearchParams({ data: query }).toString()
+  try {
+    for (const candidateRadius of radii) {
+      clinics = await fetchNearbyClinics(origin.latitude, origin.longitude, candidateRadius);
+      radius = candidateRadius;
+      if (clinics.length) break;
+    }
+    for (const candidateRadius of clinics.length ? [] : radii) {
+      clinics = await fetchNearbyClinics(origin.latitude, origin.longitude, candidateRadius, { broad: true });
+      radius = candidateRadius;
+      if (clinics.length) break;
+    }
+  } catch (error) {
+    overpassError = error;
+  }
+
+  if (!clinics.length) {
+    radius = Math.max(radius, MAX_CLINIC_RADIUS);
+    const fallbackClinics = await fetchClinicsFromNominatim(origin, radius).catch((error) => {
+      if (overpassError) throw overpassError;
+      throw error;
+    });
+    if (fallbackClinics.length) clinics = fallbackClinics;
+  }
+
+  return sendJson(response, 200, {
+    clinics,
+    origin,
+    radius,
+    attribution: "Dados © colaboradores do OpenStreetMap"
   });
+}
+
+async function resolveClinicOrigin(searchParams) {
+  const latitude = finiteNumber(searchParams.get("lat"));
+  const longitude = finiteNumber(searchParams.get("lon"));
+  if (hasValidCoordinates(latitude, longitude)) {
+    return { latitude, longitude, source: cleanText(searchParams.get("source")) || "coordinates" };
+  }
+
+  const address = addressFromSearchParams(searchParams);
+  if (address.zipCode) {
+    const cepAddress = await lookupCepAddress(address.zipCode).catch(() => null);
+    if (hasValidCoordinates(cepAddress?.latitude, cepAddress?.longitude)) {
+      return { latitude: cepAddress.latitude, longitude: cepAddress.longitude, source: "cep", address: cepAddress };
+    }
+    Object.assign(address, cepAddress || {});
+  }
+
+  const geocoded = await geocodePublicAddress(address).catch(() => null);
+  if (hasValidCoordinates(geocoded?.latitude, geocoded?.longitude)) {
+    return { latitude: geocoded.latitude, longitude: geocoded.longitude, source: address.zipCode ? "cep" : "address", address };
+  }
+
+  return null;
+}
+
+async function fetchNearbyClinics(latitude, longitude, radius, options = {}) {
+  const query = buildClinicOverpassQuery(latitude, longitude, radius, Boolean(options.broad));
+  const payload = await fetchOverpassJson(query);
 
   const seen = new Set();
   const clinics = (Array.isArray(payload?.elements) ? payload.elements : [])
@@ -248,13 +332,84 @@ async function findNearbyClinics(response, searchParams) {
     .sort((left, right) => left.distance - right.distance)
     .slice(0, 12)
     .map(({ key, ...clinic }) => clinic);
+  return clinics;
+}
 
-  return sendJson(response, 200, {
-    clinics,
-    origin: { latitude, longitude },
-    radius,
-    attribution: "Dados © colaboradores do OpenStreetMap"
-  });
+function buildClinicOverpassQuery(latitude, longitude, radius, broad = false) {
+  const searchRadius = Math.round(radius);
+  const broadSelectors = broad
+    ? `
+      nwr["name"~"veterin[áa]ri|\\\\bvet\\\\b|pet clinic|animal clinic",i](around:${searchRadius},${latitude},${longitude});
+      nwr["operator"~"veterin[áa]ri|\\\\bvet\\\\b|pet clinic|animal clinic",i](around:${searchRadius},${latitude},${longitude});
+    `
+    : "";
+
+  return `
+    [out:json][timeout:25];
+    (
+      nwr["amenity"="veterinary"](around:${searchRadius},${latitude},${longitude});
+      nwr["healthcare"="veterinary"](around:${searchRadius},${latitude},${longitude});
+      nwr["office"="veterinary"](around:${searchRadius},${latitude},${longitude});
+      nwr["veterinary"="yes"](around:${searchRadius},${latitude},${longitude});
+      nwr["shop"="pet"]["veterinary"="yes"](around:${searchRadius},${latitude},${longitude});
+      nwr["healthcare:speciality"~"veterinary|animal",i](around:${searchRadius},${latitude},${longitude});
+      ${broadSelectors}
+    );
+    out center tags 80;
+  `;
+}
+
+async function fetchOverpassJson(query) {
+  let lastError;
+  for (const url of [...new Set(OVERPASS_API_URLS)]) {
+    try {
+      return await fetchExternalJson(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+        body: new URLSearchParams({ data: query }).toString(),
+        timeoutMs: OVERPASS_REQUEST_TIMEOUT_MS
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || httpError(502, "Servico externo indisponivel.");
+}
+
+async function fetchClinicsFromNominatim(origin, radius) {
+  const queries = clinicTextSearchQueries(origin.address);
+  const seen = new Set();
+  const clinics = [];
+
+  for (const query of queries) {
+    const url = new URL(GEOCODING_API_URL);
+    url.searchParams.set("q", query);
+    url.searchParams.set("format", "jsonv2");
+    url.searchParams.set("limit", "12");
+    url.searchParams.set("addressdetails", "1");
+    url.searchParams.set("extratags", "1");
+    url.searchParams.set("namedetails", "1");
+    const viewbox = viewboxAround(origin.latitude, origin.longitude, radius);
+    if (viewbox) {
+      url.searchParams.set("viewbox", viewbox);
+      url.searchParams.set("bounded", "1");
+    }
+
+    const payload = await fetchExternalJson(url.toString(), { timeoutMs: 10000 });
+    for (const item of Array.isArray(payload) ? payload : []) {
+      const clinic = normalizeNominatimClinic(item, origin.latitude, origin.longitude, radius);
+      if (clinic && !seen.has(clinic.key)) {
+        seen.add(clinic.key);
+        clinics.push(clinic);
+      }
+    }
+    if (clinics.length >= 12) break;
+  }
+
+  return clinics
+    .sort((left, right) => left.distance - right.distance)
+    .slice(0, 12)
+    .map(({ key, ...clinic }) => clinic);
 }
 
 function normalizeClinic(element, originLatitude, originLongitude) {
@@ -263,6 +418,8 @@ function normalizeClinic(element, originLatitude, originLongitude) {
   if (latitude === null || longitude === null) return null;
 
   const tags = element.tags || {};
+  if (!isVeterinaryElement(tags)) return null;
+
   const street = cleanText(tags["addr:street"]);
   const number = cleanText(tags["addr:housenumber"]);
   const neighborhood = cleanText(tags["addr:suburb"] || tags["addr:neighbourhood"]);
@@ -292,6 +449,161 @@ function normalizeClinic(element, originLatitude, originLongitude) {
   };
 }
 
+function addressFromSearchParams(searchParams) {
+  return normalizeAddressParts({
+    zipCode: searchParams.get("cep") || searchParams.get("zipCode"),
+    address: searchParams.get("address"),
+    addressNumber: searchParams.get("number") || searchParams.get("addressNumber"),
+    addressComplement: searchParams.get("complement") || searchParams.get("addressComplement"),
+    neighborhood: searchParams.get("neighborhood"),
+    city: searchParams.get("city"),
+    state: searchParams.get("state")
+  });
+}
+
+function normalizeAddressParts(address = {}) {
+  const zipCode = cleanText(address.zipCode || address.cep || address.postcode).replace(/\D/g, "");
+  return {
+    zipCode: zipCode.length === 8 ? zipCode : "",
+    address: cleanText(address.address || address.street || address.logradouro),
+    addressNumber: cleanText(address.addressNumber || address.number || address.numero),
+    addressComplement: cleanText(address.addressComplement || address.complemento),
+    neighborhood: cleanText(address.neighborhood || address.bairro || address.suburb),
+    city: cleanText(address.city || address.localidade || address.municipio),
+    state: cleanText(address.state || address.uf)
+  };
+}
+
+function buildGeocodeQueries(address) {
+  const parts = normalizeAddressParts(address);
+  const streetWithNumber = [parts.address, parts.addressNumber].filter(Boolean).join(", ");
+  const queries = [
+    [streetWithNumber, parts.neighborhood, parts.city, parts.state, "Brasil"],
+    [parts.address, parts.neighborhood, parts.city, parts.state, "Brasil"],
+    [parts.zipCode && formatCep(parts.zipCode), parts.city, parts.state, "Brasil"],
+    [parts.neighborhood, parts.city, parts.state, "Brasil"],
+    [parts.city, parts.state, "Brasil"]
+  ]
+    .map((items) => items.filter(Boolean).join(", "))
+    .filter((query) => query.length >= 6);
+
+  return [...new Set(queries)];
+}
+
+function clinicSearchRadii(requestedRadius) {
+  const initialRadius = Math.max(1000, Math.min(MAX_CLINIC_RADIUS, requestedRadius));
+  return [...new Set([initialRadius, ...CLINIC_SEARCH_RADII.filter((radius) => radius > initialRadius)])];
+}
+
+function isVeterinaryElement(tags = {}) {
+  if (tags.amenity === "veterinary" || tags.healthcare === "veterinary" || tags.office === "veterinary") return true;
+  if (tags.veterinary === "yes") return true;
+
+  const haystack = [
+    tags.name,
+    tags.operator,
+    tags.description,
+    tags["healthcare:speciality"],
+    tags["contact:website"],
+    tags.website
+  ].map(normalizeSearchText).join(" ");
+  return isVeterinaryText(haystack);
+}
+
+function normalizeNominatimClinic(item, originLatitude, originLongitude, radius) {
+  const latitude = finiteNumber(item?.lat);
+  const longitude = finiteNumber(item?.lon);
+  if (!hasValidCoordinates(latitude, longitude)) return null;
+
+  const distance = haversineDistance(originLatitude, originLongitude, latitude, longitude);
+  if (radius && distance > (radius / 1000) * 1.25) return null;
+
+  const address = item.address || {};
+  const extra = item.extratags || {};
+  const namedetails = item.namedetails || {};
+  const displayName = cleanText(item.display_name);
+  const firstDisplayPart = displayName.split(",")[0] || "";
+  const name = cleanText(namedetails.name || item.name || address.amenity || address.shop || firstDisplayPart) || "Clínica veterinária";
+  const haystack = [name, displayName, item.category, item.class, item.type].join(" ");
+  if (!isVeterinaryText(haystack)) return null;
+
+  const street = cleanText(address.road || address.pedestrian || address.street);
+  const number = cleanText(address.house_number);
+  const neighborhood = cleanText(address.suburb || address.neighbourhood || address.city_district || address.quarter);
+  const city = cleanText(address.city || address.town || address.village || address.municipality || address.county);
+  const addressLine = [
+    street && number ? `${street}, ${number}` : street || number,
+    neighborhood,
+    city
+  ].filter(Boolean).join(" · ");
+  const openingHours = cleanText(extra.opening_hours);
+  const services = ["Veterinária"];
+  if (extra.emergency === "yes") services.push("Emergência");
+  if (openingHours) services.push("Horário informado");
+
+  return {
+    key: `nominatim-${item.osm_type || "place"}-${item.osm_id || `${latitude},${longitude}`}`,
+    id: `nominatim-${item.osm_type || "place"}-${item.osm_id || `${latitude},${longitude}`}`,
+    name,
+    address: addressLine || displayName || "Endereço não informado no mapa",
+    neighborhood,
+    city,
+    phone: cleanText(extra["contact:phone"] || extra.phone || extra["contact:mobile"]).split(/[;|]/)[0].trim(),
+    website: cleanText(extra["contact:website"] || extra.website || extra.url),
+    openingHours,
+    emergency: extra.emergency === "yes",
+    services,
+    latitude,
+    longitude,
+    distance
+  };
+}
+
+function clinicTextSearchQueries(address = {}) {
+  const parts = normalizeAddressParts(address);
+  const nearNeighborhood = [parts.neighborhood, parts.city, parts.state, "Brasil"].filter(Boolean).join(", ");
+  const nearCity = [parts.city, parts.state, "Brasil"].filter(Boolean).join(", ");
+  const place = nearNeighborhood || nearCity;
+  const queries = place
+    ? [
+      `veterinaria ${place}`,
+      `clinica veterinaria ${place}`,
+      `hospital veterinario ${place}`,
+      `vet ${place}`
+    ]
+    : ["veterinary", "veterinaria", "animal clinic", "pet clinic"];
+
+  return [...new Set(queries)];
+}
+
+function viewboxAround(latitude, longitude, radius) {
+  if (!hasValidCoordinates(latitude, longitude)) return "";
+  const kilometers = Math.max(1, radius / 1000);
+  const latitudeDelta = kilometers / 111.32;
+  const longitudeDelta = kilometers / (111.32 * Math.max(0.2, Math.abs(Math.cos((latitude * Math.PI) / 180))));
+  const west = longitude - longitudeDelta;
+  const east = longitude + longitudeDelta;
+  const north = Math.min(90, latitude + latitudeDelta);
+  const south = Math.max(-90, latitude - latitudeDelta);
+  return [west, north, east, south].map((value) => value.toFixed(6)).join(",");
+}
+
+function isVeterinaryText(value = "") {
+  const text = normalizeSearchText(value);
+  return /\b(vet|veterinaria|veterinario|veterinary)\b/.test(text) || /animal clinic|pet clinic/.test(text);
+}
+
+function normalizeSearchText(value = "") {
+  return cleanText(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function hasValidCoordinates(latitude, longitude) {
+  return latitude !== null && latitude >= -90 && latitude <= 90 && longitude !== null && longitude >= -180 && longitude <= 180;
+}
+
 function haversineDistance(fromLatitude, fromLongitude, toLatitude, toLongitude) {
   const earthRadiusKm = 6371;
   const toRadians = (degrees) => (degrees * Math.PI) / 180;
@@ -304,15 +616,16 @@ function haversineDistance(fromLatitude, fromLongitude, toLatitude, toLongitude)
 }
 
 async function fetchExternalJson(url, options = {}) {
+  const { timeoutMs = EXTERNAL_REQUEST_TIMEOUT_MS, ...fetchOptions } = options;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), EXTERNAL_REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
-      ...options,
+      ...fetchOptions,
       headers: {
         Accept: "application/json",
         "User-Agent": EXTERNAL_USER_AGENT,
-        ...(options.headers || {})
+        ...(fetchOptions.headers || {})
       },
       signal: controller.signal
     });
@@ -330,6 +643,11 @@ function finiteNumber(value) {
   if (value === "" || value === null || value === undefined) return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function formatCep(value) {
+  const digits = cleanText(value).replace(/\D/g, "");
+  return digits.length === 8 ? digits.replace(/^(\d{5})(\d{3})$/, "$1-$2") : cleanText(value);
 }
 
 async function registerUser(response, body) {
