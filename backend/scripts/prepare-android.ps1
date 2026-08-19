@@ -35,7 +35,7 @@ if (-not $authorized.Count) {
   Write-Host "1. No celular, ative Opcoes do desenvolvedor." -ForegroundColor Yellow
   Write-Host "2. Ative Depuracao USB." -ForegroundColor Yellow
   Write-Host "3. Conecte o cabo USB e autorize este computador." -ForegroundColor Yellow
-  Write-Host "4. Execute novamente: npm.cmd run celular" -ForegroundColor Yellow
+  Write-Host "4. Execute novamente: npm.cmd run celular:usb" -ForegroundColor Yellow
   exit 1
 }
 

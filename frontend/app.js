@@ -2,6 +2,7 @@ const STORAGE_KEY = "pet-id-wallet-state-v1";
 const APP_NAME = "Identificação Pet";
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
+const DOCUMENT_FILE_MAX_BYTES = 1.5 * 1024 * 1024;
 const WALLET_TEMPLATE_IMAGES = {
   front: "../tcc_screenshots_mobile/Frente.png",
   back: "../tcc_screenshots_mobile/Verso.png"
@@ -182,6 +183,7 @@ let clinicsStatus = "idle";
 let clinicsError = "";
 let clinicLocationLabel = "";
 let cepLookupTimer = null;
+let signaturePadCleanup = null;
 
 const app = document.querySelector("#app");
 const toast = document.querySelector("#toast");
@@ -235,7 +237,11 @@ document.addEventListener("click", (event) => {
   if (name === "clear-signature") clearSignaturePad();
   if (name === "save-signature") saveSignature(id || state.selectedPetId);
   if (name === "download-wallet-pdf") downloadWalletPdf(id || state.selectedPetId);
-  if (name === "wallet-slide") setWalletSlide(Number(action.dataset.slide));
+  if (name === "wallet-slide") {
+    const slide = Number(action.dataset.slide);
+    const step = action.classList.contains("wallet-carousel-arrow") ? (slide <= 0 ? -1 : 1) : 0;
+    setWalletSlide(step ? walletSlideIndex + step : slide);
+  }
   if (name === "pet-wallet") {
     state.selectedPetId = id;
     walletSlideIndex = 0;
@@ -291,6 +297,10 @@ document.addEventListener("input", (event) => {
 document.addEventListener("change", async (event) => {
   if (event.target.matches("[data-pet-photo]")) {
     await handlePetPhotoInput(event.target);
+  }
+
+  if (event.target.matches("[data-document-file]")) {
+    await handleDocumentFileInput(event.target);
   }
 
   if (event.target.matches("[data-filter='pet']")) {
@@ -923,6 +933,7 @@ function animalWalletDocumentView(pet, petVaccines, petDocs) {
   const documentNumber = pet.registry || `PET-${pet.id.slice(-6).toUpperCase()}`;
   const issuedAt = formatDate(todayISO);
   const address = ownerAddress();
+  const walletSlides = ["Frente", "Verso", "Documentos"];
 
   return `
     <div class="page-head">
@@ -1043,17 +1054,17 @@ function animalWalletDocumentView(pet, petVaccines, petDocs) {
               <em>Documento digital</em>
             </footer>
           </article>
+          ${walletDocumentsSlide(pet, petDocs)}
         </div>
 
         <div class="wallet-carousel-navigation">
           <button class="wallet-carousel-arrow" type="button" data-action="wallet-slide" data-slide="0" aria-label="Mostrar frente da carteira">←</button>
           <div class="wallet-carousel-dots" role="tablist" aria-label="Lados da carteira">
-            <button class="active" type="button" role="tab" data-action="wallet-slide" data-slide="0" aria-label="Frente" aria-selected="true"></button>
-            <button type="button" role="tab" data-action="wallet-slide" data-slide="1" aria-label="Verso" aria-selected="false"></button>
+            ${walletSlides.map((label, index) => `<button class="${index === 0 ? "active" : ""}" type="button" role="tab" data-action="wallet-slide" data-slide="${index}" aria-label="${label}" aria-selected="${index === 0 ? "true" : "false"}"></button>`).join("")}
           </div>
           <button class="wallet-carousel-arrow" type="button" data-action="wallet-slide" data-slide="1" aria-label="Mostrar verso da carteira">→</button>
         </div>
-        <p class="wallet-carousel-status" aria-live="polite" data-wallet-slide-status>Frente · 1 de 2 — arraste para o lado</p>
+        <p class="wallet-carousel-status" aria-live="polite" data-wallet-slide-status>Frente · 1 de ${walletSlides.length} — arraste para o lado</p>
       </div>
     </section>
 
@@ -1103,6 +1114,75 @@ function animalWalletDocumentView(pet, petVaccines, petDocs) {
   `;
 }
 
+function walletDocumentsSlide(pet, petDocs) {
+  const documentNumber = pet.registry || `PET-${pet.id.slice(-6).toUpperCase()}`;
+  const docs = petDocs.slice(0, 4);
+  const attachedCount = petDocs.filter((doc) => documentAttachment(doc)).length;
+
+  return `
+    <article class="animal-wallet-card animal-wallet-documents" aria-label="Documentos anexados do pet" aria-roledescription="slide">
+      <header class="pet-id-header pet-id-header-documents">
+        <span class="pet-id-seal"><img src="./assets/pet-icon.svg" alt="" /></span>
+        <span class="pet-id-heading">
+          <small>Arquivos do pet</small>
+          <strong>Documentos anexados</strong>
+          <em>${escapeHTML(pet.name)} · ${escapeHTML(documentNumber)}</em>
+        </span>
+        <span class="pet-id-country">${attachedCount}</span>
+      </header>
+
+      <div class="pet-id-documents-body">
+        <div class="pet-id-documents-summary">
+          <div>
+            <span>Registros salvos</span>
+            <strong>${petDocs.length} documento${petDocs.length === 1 ? "" : "s"}</strong>
+          </div>
+          <div>
+            <span>Arquivos enviados</span>
+            <strong>${attachedCount} anexo${attachedCount === 1 ? "" : "s"}</strong>
+          </div>
+        </div>
+
+        ${
+          docs.length
+            ? `<div class="wallet-documents-grid">${docs.map(walletDocumentTile).join("")}</div>`
+            : `<div class="wallet-documents-empty">
+                <strong>Nenhum documento cadastrado</strong>
+                <span>Use o botão Documento para anexar atestados, exames e receitas.</span>
+              </div>`
+        }
+      </div>
+
+      <footer class="pet-id-footer">
+        <strong>Anexos digitais</strong>
+        <span>${escapeHTML(pet.name)} · ${escapeHTML(documentNumber)}</span>
+        <em>${formatDate(todayISO)}</em>
+      </footer>
+    </article>
+  `;
+}
+
+function walletDocumentTile(doc) {
+  const attachment = documentAttachment(doc);
+  return `
+    <div class="wallet-document-tile ${attachment ? "has-attachment" : ""}">
+      <div class="wallet-document-preview ${attachment && isImageAttachment(attachment) ? "image" : "file"}">
+        ${
+          attachment && isImageAttachment(attachment)
+            ? `<img src="${escapeHTML(attachment.dataUrl)}" alt="Documento ${escapeHTML(doc.title)}" />`
+            : `<span>${attachment ? documentFileKind(attachment) : "DOC"}</span>`
+        }
+      </div>
+      <div class="wallet-document-tile-text">
+        <span>${escapeHTML(doc.kind || "Documento")}</span>
+        <strong>${escapeHTML(doc.title || "Documento")}</strong>
+        <em>${formatDate(doc.date)} · ${doc.expiresAt ? `Val. ${formatDate(doc.expiresAt)}` : "Sem validade"}</em>
+        ${attachment ? `<small>${escapeHTML(attachment.name)} · ${formatFileSize(attachment.size)}</small>` : `<small>Sem arquivo anexado</small>`}
+      </div>
+    </div>
+  `;
+}
+
 function walletIdentityPhoto(pet) {
   if (pet.photo) return `<img src="${escapeHTML(safeImageSrc(pet.photo))}" alt="Foto de ${escapeHTML(pet.name)}" />`;
   return `<div class="pet-id-photo-placeholder">${initials(pet.name)}</div>`;
@@ -1119,7 +1199,8 @@ function walletField(label, value, wide = false) {
 
 function setWalletSlide(index, smooth = true) {
   const track = document.querySelector("[data-wallet-track]");
-  const normalizedIndex = Math.max(0, Math.min(1, Number.isFinite(index) ? index : 0));
+  const maxIndex = Math.max((track?.children.length || 1) - 1, 0);
+  const normalizedIndex = Math.max(0, Math.min(maxIndex, Number.isFinite(index) ? index : 0));
   walletSlideIndex = normalizedIndex;
   if (track) {
     track.scrollTo({
@@ -1131,7 +1212,10 @@ function setWalletSlide(index, smooth = true) {
 }
 
 function updateWalletSlideControls(index) {
-  const normalizedIndex = Math.max(0, Math.min(1, index));
+  const track = document.querySelector("[data-wallet-track]");
+  const total = Math.max(track?.children.length || 1, 1);
+  const labels = ["Frente", "Verso", "Documentos"];
+  const normalizedIndex = Math.max(0, Math.min(total - 1, index));
   walletSlideIndex = normalizedIndex;
   document.querySelectorAll(".wallet-carousel-dots [data-slide]").forEach((dot) => {
     const selected = Number(dot.dataset.slide) === normalizedIndex;
@@ -1139,7 +1223,7 @@ function updateWalletSlideControls(index) {
     dot.setAttribute("aria-selected", String(selected));
   });
   const status = document.querySelector("[data-wallet-slide-status]");
-  if (status) status.textContent = `${normalizedIndex === 0 ? "Frente" : "Verso"} · ${normalizedIndex + 1} de 2 — arraste para o lado`;
+  if (status) status.textContent = `${labels[normalizedIndex] || "Slide"} · ${normalizedIndex + 1} de ${total} — arraste para o lado`;
 }
 
 function animalData(label, value) {
@@ -1814,18 +1898,87 @@ function vaccineItem(vaccine) {
 }
 
 function documentItem(doc) {
+  const attachment = documentAttachment(doc);
   return `
-    <article class="document-card">
-      <div class="document-top">
-        <div>
-          <h3>${escapeHTML(doc.title)}</h3>
-          <p class="muted small">${escapeHTML(doc.kind)} · ${formatDate(doc.date)}</p>
+    <article class="document-card ${attachment ? "has-attachment" : ""}">
+      ${attachment ? documentAttachmentPreview(attachment, "card") : ""}
+      <div class="document-card-content">
+        <div class="document-top">
+          <div>
+            <h3>${escapeHTML(doc.title)}</h3>
+            <p class="muted small">${escapeHTML(doc.kind)} · ${formatDate(doc.date)}</p>
+          </div>
+          <span class="pill">${doc.expiresAt ? formatDate(doc.expiresAt) : "Sem validade"}</span>
         </div>
-        <span class="pill">${doc.expiresAt ? formatDate(doc.expiresAt) : "Sem validade"}</span>
+        <p class="muted small">${escapeHTML(doc.notes || "Sem observações.")}</p>
+        ${attachment ? `<p class="muted small">${escapeHTML(attachment.name)} · ${formatFileSize(attachment.size)}</p>` : ""}
       </div>
-      <p class="muted small">${escapeHTML(doc.notes || "Sem observações.")}</p>
     </article>
   `;
+}
+
+function documentAttachment(doc) {
+  const attachment = doc?.attachment && typeof doc.attachment === "object" ? doc.attachment : null;
+  if (!attachment?.dataUrl) return null;
+  return normalizeDocumentAttachment(attachment);
+}
+
+function normalizeDocumentAttachment(attachment) {
+  const source = attachment && typeof attachment === "object" ? attachment : {};
+  const dataUrl = safeDocumentDataUrl(source.dataUrl);
+  if (!dataUrl) return null;
+
+  return {
+    name: String(source.name || "documento").trim() || "documento",
+    type: String(source.type || "").trim(),
+    originalType: String(source.originalType || "").trim(),
+    size: Number(source.size || 0),
+    dataUrl,
+    uploadedAt: source.uploadedAt || ""
+  };
+}
+
+function documentAttachmentFromForm(data) {
+  try {
+    const attachment = JSON.parse(String(data.attachment || ""));
+    return normalizeDocumentAttachment(attachment);
+  } catch {
+    return null;
+  }
+}
+
+function documentUploadPreview(attachment) {
+  const normalized = normalizeDocumentAttachment(attachment);
+  if (!normalized) {
+    return `
+      <div class="document-upload-preview empty" data-document-attachment-preview>
+        <span>PDF</span>
+        <strong>Nenhum arquivo anexado</strong>
+      </div>
+    `;
+  }
+
+  return documentAttachmentPreview(normalized, "upload");
+}
+
+function documentAttachmentPreview(attachment, mode = "card") {
+  const isImage = isImageAttachment(attachment);
+  return `
+    <div class="document-attachment-preview ${isImage ? "image" : "file"} ${mode}" data-document-attachment-preview>
+      ${isImage ? `<img src="${escapeHTML(attachment.dataUrl)}" alt="Documento anexado" />` : `<span>${documentFileKind(attachment)}</span>`}
+      <strong>${escapeHTML(attachment.name)}</strong>
+    </div>
+  `;
+}
+
+function documentFileKind(attachment) {
+  if (isImageAttachment(attachment)) return "IMG";
+  if ((attachment.type || "").includes("pdf") || /\.pdf$/i.test(attachment.name || "")) return "PDF";
+  return "ARQ";
+}
+
+function isImageAttachment(attachment) {
+  return Boolean(attachment?.dataUrl?.startsWith("data:image/"));
 }
 
 function clinicCard(clinic) {
@@ -1906,6 +2059,7 @@ function installHint() {
 
 function openInstallHelp() {
   const localUrl = "http://127.0.0.1:5241/";
+  const wifiUrl = "http://IP-DO-COMPUTADOR:5241/";
   openModal(`
     <div class="modal-head">
       <h2>Instalar como aplicativo</h2>
@@ -1915,7 +2069,7 @@ function openInstallHelp() {
       <div class="grid">
         <div class="card">
           <h3>Android</h3>
-          <p class="muted small" style="margin-top: 6px;">No Chrome, abra o app em HTTPS ou localhost. Quando o navegador reconhecer a PWA, toque em Instalar app. Para teste sem hospedar, use cabo USB com ADB e acesse ${localUrl}</p>
+          <p class="muted small" style="margin-top: 6px;">No Chrome, abra o app em HTTPS para instalar como PWA completa. No computador, o modo local continua em ${localUrl}</p>
         </div>
         <div class="card">
           <h3>iPhone</h3>
@@ -1923,7 +2077,11 @@ function openInstallHelp() {
         </div>
         <div class="card">
           <h3>Teste por Wi-Fi</h3>
-          <p class="muted small" style="margin-top: 6px;">Abrir pelo IP do computador serve para testar layout e navegação. Porém, em http://IP:porta o navegador pode criar só atalho, porque não é uma origem segura.</p>
+          <p class="muted small" style="margin-top: 6px;">Com computador e celular na mesma rede, rode o servidor e abra o endereço mostrado no terminal, como ${wifiUrl}. Esse modo sincroniza, mas HTTP local pode virar apenas atalho.</p>
+        </div>
+        <div class="card">
+          <h3>Fora da rede</h3>
+          <p class="muted small" style="margin-top: 6px;">Para usar de qualquer lugar, rode npm.cmd run internet no computador de casa e abra o link HTTPS mostrado no terminal.</p>
         </div>
       </div>
     </div>
@@ -2113,6 +2271,7 @@ function openVaccineModal(petId = "") {
 
 function openDocumentModal(petId = "") {
   const selected = petId || state.selectedPetId || state.pets[0]?.id || "";
+  const fileInputId = createId("document-file");
   openModal(`
     <div class="modal-head">
       <h2>Novo documento</h2>
@@ -2126,6 +2285,18 @@ function openDocumentModal(petId = "") {
           ${selectField("Tipo", "kind", "Viagem", ["Viagem", "Exame", "Receita", "Atestado", "Outro"])}
           ${field("Data", "date", todayISO, "date")}
           ${field("Validade", "expiresAt", "", "date")}
+        </div>
+        <input type="hidden" name="attachment" value="" data-document-attachment-value />
+        <div class="document-upload">
+          <div class="document-upload-preview empty" data-document-attachment-preview>
+            <span>PDF</span>
+            <strong>Nenhum arquivo anexado</strong>
+          </div>
+          <div class="document-upload-actions">
+            <label class="secondary-button" for="${fileInputId}">Anexar documento</label>
+            <input id="${fileInputId}" class="hidden" type="file" accept="image/*,.pdf,application/pdf" data-document-file />
+            <p class="muted small">Use foto/scan do documento ou PDF de atestado, exame, receita e viagem.</p>
+          </div>
         </div>
         ${textareaField("Observações", "notes", "")}
         <button class="primary-button" type="submit">Salvar documento</button>
@@ -2199,12 +2370,13 @@ function openDrawer() {
   document.body.append(drawer);
 }
 
-function openModal(content) {
+function openModal(content, options = {}) {
   closeModal();
   const wrapper = document.createElement("div");
-  wrapper.className = "modal-backdrop";
+  wrapper.className = ["modal-backdrop", options.backdropClass || ""].filter(Boolean).join(" ");
   wrapper.dataset.modal = "dialog";
-  wrapper.innerHTML = `<section class="modal" role="dialog" aria-modal="true">${content}</section>`;
+  const modalClass = ["modal", options.className || ""].filter(Boolean).join(" ");
+  wrapper.innerHTML = `<section class="${modalClass}" role="dialog" aria-modal="true">${content}</section>`;
   wrapper.addEventListener("click", (event) => {
     if (event.target === wrapper) closeModal();
   });
@@ -2214,6 +2386,10 @@ function openModal(content) {
 }
 
 function closeModal() {
+  if (signaturePadCleanup) {
+    signaturePadCleanup();
+    signaturePadCleanup = null;
+  }
   document.querySelectorAll("[data-modal]").forEach((modal) => modal.remove());
 }
 
@@ -2235,6 +2411,25 @@ async function handlePetPhotoInput(input) {
   }
 }
 
+async function handleDocumentFileInput(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+
+  try {
+    const attachment = await documentFileToAttachment(file);
+    const form = input.closest("form");
+    const hidden = form?.querySelector("[data-document-attachment-value]");
+    const preview = form?.querySelector("[data-document-attachment-preview]");
+    if (hidden) hidden.value = JSON.stringify(attachment);
+    if (preview) preview.outerHTML = documentUploadPreview(attachment);
+    notify("Documento anexado. Agora salve o registro.");
+  } catch (error) {
+    console.error(error);
+    notify(error.message || "Não foi possível anexar o documento.");
+    input.value = "";
+  }
+}
+
 function openSignatureModal(id = "") {
   const pet = state.pets.find((item) => item.id === id) || getSelectedPet();
   if (!pet) return;
@@ -2246,14 +2441,14 @@ function openSignatureModal(id = "") {
     </div>
     <div class="modal-body">
       <div class="signature-pad-wrap">
-        <canvas class="signature-pad" width="900" height="300" data-signature-pad data-pet-id="${escapeHTML(pet.id)}"></canvas>
-        <div class="button-row">
+        <canvas class="signature-pad" width="1200" height="420" data-signature-pad data-pet-id="${escapeHTML(pet.id)}"></canvas>
+        <div class="button-row signature-pad-actions">
           <button class="secondary-button" type="button" data-action="clear-signature">Limpar</button>
           <button class="primary-button" type="button" data-action="save-signature" data-id="${pet.id}">Salvar assinatura</button>
         </div>
       </div>
     </div>
-  `);
+  `, { className: "signature-modal", backdropClass: "signature-backdrop" });
 
   const canvas = document.querySelector("[data-signature-pad]");
   setupSignaturePad(canvas, pet.signature);
@@ -2264,14 +2459,17 @@ function setupSignaturePad(canvas, initialData = "") {
   const context = canvas.getContext("2d");
   let drawing = false;
   let lastPoint = null;
+  canvas.signatureData = initialData || "";
 
   const resize = () => {
     const ratio = window.devicePixelRatio || 1;
+    const previousData = canvas.signatureData || canvas.toDataURL("image/png");
     const rect = canvas.getBoundingClientRect();
     canvas.width = Math.max(Math.round(rect.width * ratio), 600);
     canvas.height = Math.max(Math.round(rect.height * ratio), 210);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     clearCanvas(context, canvas);
+    if (previousData) drawSignatureImage(context, previousData, canvas);
   };
 
   const point = (event) => {
@@ -2281,6 +2479,7 @@ function setupSignaturePad(canvas, initialData = "") {
 
   const draw = (event) => {
     if (!drawing) return;
+    event.preventDefault();
     const current = point(event);
     context.strokeStyle = "#123836";
     context.lineWidth = 3;
@@ -2291,12 +2490,15 @@ function setupSignaturePad(canvas, initialData = "") {
     context.lineTo(current.x, current.y);
     context.stroke();
     lastPoint = current;
+    canvas.signatureData = "";
   };
 
   resize();
-  if (initialData) drawSignatureImage(context, initialData, canvas);
+  window.addEventListener("resize", resize);
+  signaturePadCleanup = () => window.removeEventListener("resize", resize);
 
   canvas.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
     drawing = true;
     lastPoint = point(event);
     canvas.setPointerCapture(event.pointerId);
@@ -2305,10 +2507,12 @@ function setupSignaturePad(canvas, initialData = "") {
   canvas.addEventListener("pointerup", () => {
     drawing = false;
     lastPoint = null;
+    canvas.signatureData = canvas.toDataURL("image/png");
   });
   canvas.addEventListener("pointerleave", () => {
     drawing = false;
     lastPoint = null;
+    canvas.signatureData = canvas.toDataURL("image/png");
   });
 }
 
@@ -2339,6 +2543,7 @@ function clearSignaturePad() {
   const context = canvas?.getContext("2d");
   if (!canvas || !context) return;
   clearCanvas(context, canvas);
+  canvas.signatureData = "";
 }
 
 function saveSignature(id = "") {
@@ -2360,7 +2565,13 @@ async function downloadWalletPdf(id = "") {
   try {
     const front = await renderWalletCanvas(pet, "front");
     const back = await renderWalletCanvas(pet, "back");
-    const pdf = createPdfFromCanvases([front, back]);
+    const petDocs = state.documents.filter((doc) => doc.petId === pet.id);
+    const canvases = [front, back];
+    const documentPages = chunkItems(petDocs, 4);
+    for (let index = 0; index < documentPages.length; index += 1) {
+      canvases.push(await renderWalletDocumentsCanvas(pet, petDocs, documentPages[index], index + 1, documentPages.length));
+    }
+    const pdf = createPdfFromCanvases(canvases);
     downloadBlob(pdf, `carteira-${slugify(pet.name || "pet")}.pdf`);
     notify("PDF da carteira baixado.");
   } catch (error) {
@@ -2600,7 +2811,17 @@ async function handleForm(form) {
   }
 
   if (type === "document") {
-    state.documents.push({ ...data, id: createId("doc") });
+    const attachment = documentAttachmentFromForm(data);
+    state.documents.push({
+      id: createId("doc"),
+      petId: data.petId,
+      title: data.title,
+      kind: data.kind,
+      date: data.date,
+      expiresAt: data.expiresAt,
+      notes: data.notes,
+      attachment
+    });
     state.selectedPetId = data.petId;
     notify("Documento salvo.");
   }
@@ -2722,6 +2943,42 @@ function imageFileToDataUrl(file, maxSize = 900) {
   });
 }
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function documentFileToAttachment(file) {
+  const isImage = file.type.startsWith("image/");
+  const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+
+  if (!isImage && !isPdf) {
+    throw new Error("Anexe uma imagem ou um PDF.");
+  }
+
+  if (!isImage && file.size > DOCUMENT_FILE_MAX_BYTES) {
+    throw new Error(`Use um PDF de até ${formatFileSize(DOCUMENT_FILE_MAX_BYTES)}.`);
+  }
+
+  const dataUrl = isImage ? await imageFileToDataUrl(file, 1400) : await fileToDataUrl(file);
+  if (dataUrl.length > DOCUMENT_FILE_MAX_BYTES * 1.4) {
+    throw new Error(`Use um arquivo de até ${formatFileSize(DOCUMENT_FILE_MAX_BYTES)}.`);
+  }
+
+  return {
+    name: file.name || "documento",
+    type: isImage ? "image/jpeg" : "application/pdf",
+    originalType: file.type || "",
+    size: isImage ? dataUrl.length : file.size,
+    dataUrl,
+    uploadedAt: new Date().toISOString()
+  };
+}
+
 async function renderWalletCanvas(pet, side) {
   const template = await loadCanvasImage(WALLET_TEMPLATE_IMAGES[side]);
   const canvas = document.createElement("canvas");
@@ -2739,6 +2996,156 @@ async function renderWalletCanvas(pet, side) {
   }
 
   return canvas;
+}
+
+async function renderWalletDocumentsCanvas(pet, allPetDocs, pageDocs = allPetDocs, pageNumber = 1, totalPages = 1) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1280;
+  canvas.height = 807;
+  const context = canvas.getContext("2d");
+  const documentNumber = pet.registry || `PET-${pet.id.slice(-6).toUpperCase()}`;
+  const attachedCount = allPetDocs.filter((doc) => documentAttachment(doc)).length;
+  const docs = pageDocs.slice(0, 4);
+
+  drawRoundedRect(context, 0, 0, canvas.width, canvas.height, 0, "#eaf1e8");
+  drawGrid(context, 0, 0, canvas.width, canvas.height, "rgba(42, 201, 167, 0.08)");
+  drawRoundedRect(context, 32, 30, 1216, 118, 18, "#173733");
+  drawRoundedRect(context, 58, 53, 72, 72, 36, "#f7f2df");
+  drawFittedText(context, "PET", 94, 99, 54, {
+    align: "center",
+    color: "#17716b",
+    size: 24,
+    minSize: 16,
+    weight: 900
+  });
+  drawFittedText(context, "DOCUMENTOS ANEXADOS", 154, 78, 620, {
+    color: "#f4fbf8",
+    size: 32,
+    minSize: 20,
+    weight: 900
+  });
+  drawFittedText(context, `${pet.name || "Pet"} - ${documentNumber}`, 154, 119, 620, {
+    color: "#e8c978",
+    size: 24,
+    minSize: 15,
+    weight: 800,
+    uppercase: false
+  });
+  drawFittedText(context, `${allPetDocs.length} REGISTROS | ${attachedCount} ANEXOS`, 1090, 102, 260, {
+    align: "center",
+    color: "#e8c978",
+    size: 25,
+    minSize: 14,
+    weight: 900
+  });
+
+  if (!docs.length) {
+    drawRoundedRect(context, 78, 220, 1124, 390, 20, "rgba(255, 255, 255, 0.72)");
+    drawFittedText(context, "NENHUM DOCUMENTO CADASTRADO", 640, 385, 760, {
+      align: "center",
+      color: "#173731",
+      size: 32,
+      minSize: 18,
+      weight: 900
+    });
+    drawFittedText(context, "Adicione atestados, exames, receitas e arquivos de viagem pelo app.", 640, 430, 760, {
+      align: "center",
+      color: "#466b62",
+      size: 23,
+      minSize: 14,
+      weight: 700,
+      uppercase: false
+    });
+  } else {
+    const positions = [
+      [58, 184],
+      [650, 184],
+      [58, 455],
+      [650, 455]
+    ];
+
+    for (let index = 0; index < docs.length; index += 1) {
+      await drawWalletDocumentTile(context, docs[index], positions[index][0], positions[index][1], 572, 230);
+    }
+  }
+
+  drawRoundedRect(context, 34, 742, 1212, 44, 10, "rgba(255, 255, 255, 0.72)");
+  drawFittedText(context, "ANEXOS DIGITAIS", 62, 772, 260, {
+    color: "#173c35",
+    size: 20,
+    minSize: 13,
+    weight: 900
+  });
+  drawFittedText(context, `Emitido em ${formatDate(todayISO)}`, 640, 772, 420, {
+    align: "center",
+    color: "#1e5549",
+    size: 20,
+    minSize: 13,
+    weight: 700,
+    uppercase: false
+  });
+  drawFittedText(context, totalPages > 1 ? `CARTEIRA PET ${pageNumber}/${totalPages}` : "CARTEIRA PET", 1210, 772, 220, {
+    align: "right",
+    color: "#173c35",
+    size: 20,
+    minSize: 13,
+    weight: 900
+  });
+
+  return canvas;
+}
+
+async function drawWalletDocumentTile(context, doc, x, y, width, height) {
+  const attachment = documentAttachment(doc);
+  drawRoundedRect(context, x, y, width, height, 16, "rgba(255, 255, 255, 0.82)");
+  drawRoundedRect(context, x + 16, y + 18, 188, height - 36, 12, "#d8eee1");
+
+  if (attachment && isImageAttachment(attachment)) {
+    await drawDataImageClipped(context, attachment.dataUrl, x + 16, y + 18, 188, height - 36, 12, true);
+  } else {
+    drawGrid(context, x + 16, y + 18, 188, height - 36, "#e8f6ee");
+    drawFittedText(context, attachment ? documentFileKind(attachment) : "DOC", x + 110, y + height / 2 + 10, 142, {
+      align: "center",
+      color: "#17716b",
+      size: 48,
+      minSize: 26,
+      weight: 900
+    });
+  }
+
+  drawFittedText(context, doc.kind || "Documento", x + 228, y + 48, width - 252, {
+    color: "#24705e",
+    size: 18,
+    minSize: 12,
+    weight: 900
+  });
+  drawFittedText(context, doc.title || "Documento", x + 228, y + 88, width - 252, {
+    color: "#173731",
+    size: 28,
+    minSize: 16,
+    weight: 900
+  });
+  drawFittedText(context, `Data: ${formatDate(doc.date)}`, x + 228, y + 126, width - 252, {
+    color: "#466b62",
+    size: 20,
+    minSize: 13,
+    weight: 700,
+    uppercase: false
+  });
+  drawFittedText(context, doc.expiresAt ? `Validade: ${formatDate(doc.expiresAt)}` : "Sem validade cadastrada", x + 228, y + 158, width - 252, {
+    color: "#466b62",
+    size: 20,
+    minSize: 13,
+    weight: 700,
+    uppercase: false
+  });
+  drawFittedText(context, attachment ? `${attachment.name} - ${formatFileSize(attachment.size)}` : "Sem arquivo anexado", x + 228, y + 198, width - 252, {
+    color: "#173731",
+    size: 18,
+    minSize: 12,
+    weight: 800,
+    uppercase: false
+  });
 }
 
 async function drawWalletFront(context, pet, doc) {
@@ -3244,6 +3651,14 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+function chunkItems(items, size) {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
 function filteredPets() {
   return state.pets.filter((pet) => {
     const matchesFilter = petFilter === "all" || pet.species === petFilter || (petFilter === "Outros" && !["Cachorro", "Gato"].includes(pet.species));
@@ -3362,6 +3777,13 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
 }
 
+function formatFileSize(bytes = 0) {
+  const value = Number(bytes) || 0;
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
+}
+
 function readonlyField(label, name, value = "") {
   return `
     <div class="field readonly-field">
@@ -3400,6 +3822,13 @@ function escapeHTML(value = "") {
 function safeImageSrc(value = "") {
   const text = String(value || "");
   if (text.startsWith("data:image/") || text.startsWith("./") || text.startsWith("/")) return text;
+  return "";
+}
+
+function safeDocumentDataUrl(value = "") {
+  const text = String(value || "");
+  if (/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(text)) return text;
+  if (/^data:application\/pdf;base64,/i.test(text)) return text;
   return "";
 }
 

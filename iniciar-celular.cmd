@@ -1,15 +1,14 @@
 @echo off
 cd /d "%~dp0"
 title Identificacao Pet - Celular
-echo MODO ANDROID INSTALAVEL
+echo MODO CELULAR POR WI-FI
 echo.
 echo Antes de continuar:
-echo - Ative a Depuracao USB no Android.
-echo - Conecte o celular pelo cabo USB.
-echo - Aceite a autorizacao exibida no celular.
+echo - Deixe o computador ligado.
+echo - Conecte computador e celular na mesma rede Wi-Fi.
+echo - Use no celular o endereco mostrado no terminal.
 echo.
-echo Iniciando banco, servidor e conexao Android...
-echo O navegador do celular sera aberto automaticamente.
+echo Iniciando banco e servidor...
 echo.
 call npm.cmd run celular
 echo.

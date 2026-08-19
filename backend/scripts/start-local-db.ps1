@@ -25,9 +25,16 @@ if ($env:POSTGRES_BIN) {
 
 $initDb = Join-Path $postgresBin "initdb.exe"
 $pgCtl = Join-Path $postgresBin "pg_ctl.exe"
+$pgIsReady = Join-Path $postgresBin "pg_isready.exe"
 
 if (-not (Test-Path -LiteralPath $initDb) -or -not (Test-Path -LiteralPath $pgCtl)) {
   throw "initdb.exe ou pg_ctl.exe nao foi encontrado em '$postgresBin'."
+}
+
+function Test-PostgresReady {
+  if (-not (Test-Path -LiteralPath $pgIsReady)) { return $false }
+  & $pgIsReady -h 127.0.0.1 -p $port -U postgres *> $null
+  return ($LASTEXITCODE -eq 0)
 }
 
 $dataParent = Split-Path -Parent $dataDirectory
@@ -41,10 +48,28 @@ if (-not (Test-Path -LiteralPath (Join-Path $dataDirectory "PG_VERSION"))) {
   if ($LASTEXITCODE -ne 0) { throw "O initdb falhou com o codigo $LASTEXITCODE." }
 }
 
+if (Test-PostgresReady) {
+  Write-Host "PostgreSQL local ja esta em execucao na porta $port."
+  exit 0
+}
+
 & $pgCtl -D $dataDirectory status *> $null
 if ($LASTEXITCODE -eq 0) {
   Write-Host "PostgreSQL local ja esta em execucao na porta $port."
   exit 0
+}
+
+$portListeners = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+if ($portListeners.Count) {
+  for ($attempt = 0; $attempt -lt 15; $attempt++) {
+    Start-Sleep -Seconds 1
+    if (Test-PostgresReady) {
+      Write-Host "PostgreSQL local ja esta em execucao na porta $port."
+      exit 0
+    }
+  }
+
+  throw "A porta $port ja esta ocupada, mas o PostgreSQL nao respondeu em 127.0.0.1:$port."
 }
 
 Write-Host "Iniciando PostgreSQL local na porta $port..."

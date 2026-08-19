@@ -83,11 +83,20 @@ CREATE TABLE IF NOT EXISTS pet_documents (
   document_date DATE,
   expires_at DATE,
   notes TEXT NOT NULL DEFAULT '',
+  attachment_name TEXT NOT NULL DEFAULT '',
+  attachment_type TEXT NOT NULL DEFAULT '',
+  attachment_size INTEGER NOT NULL DEFAULT 0,
+  attachment_data TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, id),
   FOREIGN KEY (user_id, pet_id) REFERENCES pet_pets(user_id, id) ON DELETE CASCADE
 );
+
+ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_type TEXT NOT NULL DEFAULT '';
+ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_size INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_data TEXT NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS pet_travel_plans (
   user_id TEXT PRIMARY KEY REFERENCES pet_app_users(id) ON DELETE CASCADE,

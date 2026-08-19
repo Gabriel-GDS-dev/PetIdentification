@@ -5,12 +5,12 @@
   "scripts": {
     "db:start": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File backend\\scripts\\start-local-db.ps1",
     "android:prepare": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File backend\\scripts\\prepare-android.ps1",
-    "prestart": "npm.cmd run db:start",
-    "start": "npm.cmd --prefix backend start",
-    "precelular": "npm.cmd run db:start && npm.cmd run android:prepare",
-    "celular": "npm.cmd --prefix backend start",
-    "predev": "npm.cmd run db:start",
-    "dev": "npm.cmd --prefix backend run dev",
+    "server:stop": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File backend\\scripts\\stop-server.ps1",
+    "internet": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File backend\\scripts\\start-internet.ps1",
+    "start": "npm.cmd run db:start && npm.cmd --prefix backend start",
+    "celular": "npm.cmd run db:start && npm.cmd --prefix backend start",
+    "celular:usb": "npm.cmd run db:start && npm.cmd run android:prepare && npm.cmd --prefix backend start",
+    "dev": "npm.cmd run db:start && npm.cmd --prefix backend run dev",
     "predb:setup": "npm.cmd run db:start",
     "db:setup": "npm.cmd --prefix backend run db:setup"
   }

@@ -8,7 +8,7 @@ const { createPoolWithSchema, formatDatabaseError, getDatabaseName, getDatabaseU
 const PORT = Number(process.env.PORT || 5241);
 const HOST = process.env.HOST || "0.0.0.0";
 const SESSION_SECRET = process.env.SESSION_SECRET || "pet-identification-dev-secret";
-const MAX_JSON_BYTES = 2 * 1024 * 1024;
+const MAX_JSON_BYTES = 8 * 1024 * 1024;
 const EXTERNAL_REQUEST_TIMEOUT_MS = 22000;
 const OVERPASS_REQUEST_TIMEOUT_MS = 12000;
 const OVERPASS_API_URL = process.env.OVERPASS_API_URL || "https://overpass-api.de/api/interpreter";
@@ -645,6 +645,20 @@ function finiteNumber(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function normalizeDocumentAttachment(attachment = {}) {
+  const source = attachment && typeof attachment === "object" ? attachment : {};
+  const dataUrl = cleanText(source.dataUrl);
+  const safeDataUrl = /^data:(image\/(png|jpe?g|webp|gif)|application\/pdf);base64,/i.test(dataUrl) ? dataUrl : "";
+  const size = Math.max(0, Math.min(Number(source.size) || 0, 8 * 1024 * 1024));
+
+  return {
+    name: cleanText(source.name).slice(0, 240),
+    type: cleanText(source.type || source.originalType).slice(0, 120),
+    size: Math.round(size),
+    dataUrl: safeDataUrl
+  };
+}
+
 function formatCep(value) {
   const digits = cleanText(value).replace(/\D/g, "");
   return digits.length === 8 ? digits.replace(/^(\d{5})(\d{3})$/, "$1-$2") : cleanText(value);
@@ -831,10 +845,12 @@ async function saveWalletState(user, incomingState, clientUpdatedAt) {
     }
 
     for (const document of documents) {
+      const attachment = normalizeDocumentAttachment(document.attachment);
       await client.query(
         `INSERT INTO pet_documents (
-          user_id, id, pet_id, title, kind, document_date, expires_at, notes
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          user_id, id, pet_id, title, kind, document_date, expires_at, notes,
+          attachment_name, attachment_type, attachment_size, attachment_data
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [
           user.id,
           cleanText(document.id),
@@ -843,7 +859,11 @@ async function saveWalletState(user, incomingState, clientUpdatedAt) {
           cleanText(document.kind),
           coerceDate(document.date),
           coerceDate(document.expiresAt),
-          cleanText(document.notes)
+          cleanText(document.notes),
+          attachment.name,
+          attachment.type,
+          attachment.size,
+          attachment.dataUrl
         ]
       );
     }
