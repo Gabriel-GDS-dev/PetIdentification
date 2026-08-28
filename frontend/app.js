@@ -159,7 +159,26 @@ const defaultState = {
       destinationRules: false,
       medicine: false
     }
-  }
+  },
+  travelByPet: {
+    "pet-luna": {
+      destination: "Curitiba, PR",
+      date: "2026-07-08",
+      transport: "Carro",
+      selectedPetId: "pet-luna",
+      notes: "Confirmar hotel pet friendly e rota com pausas.",
+      items: {
+        vaccine: true,
+        certificate: false,
+        carrier: true,
+        food: true,
+        collar: true,
+        destinationRules: false,
+        medicine: false
+      }
+    }
+  },
+  feedback: []
 };
 
 const views = [
@@ -219,58 +238,75 @@ document.addEventListener("submit", async (event) => {
 
 document.addEventListener("click", (event) => {
   const action = event.target.closest("[data-action]");
-  if (!action) return;
+  if (action) {
+    const { action: name } = action.dataset;
+    const id = action.dataset.id;
+    const view = action.dataset.view;
 
-  const { action: name } = action.dataset;
-  const id = action.dataset.id;
-  const view = action.dataset.view;
+    if (name === "view") navigate(view);
+    if (name === "auth-view") setAuthView(action.dataset.mode);
+    if (name === "open-feedback") navigate("feedback");
+    if (name === "feedback") navigate("feedback");
+    if (name === "logout") logout();
+    if (name === "drawer") openDrawer();
+    if (name === "close-modal") closeModal();
+    if (name === "new-pet") openPetModal();
+    if (name === "edit-pet") openPetModal(id);
+    if (name === "delete-pet") deletePet(id);
+    if (name === "sign-pet") openSignatureModal(id || state.selectedPetId);
+    if (name === "clear-signature") clearSignaturePad();
+    if (name === "save-signature") saveSignature(id || state.selectedPetId);
+    if (name === "download-wallet-pdf") downloadWalletPdf(id || state.selectedPetId);
+    if (name === "wallet-slide") {
+      const slide = Number(action.dataset.slide);
+      const step = action.classList.contains("wallet-carousel-arrow") ? (slide <= 0 ? -1 : 1) : 0;
+      setWalletSlide(step ? walletSlideIndex + step : slide);
+    }
+    if (name === "pet-wallet") {
+      state.selectedPetId = id;
+      walletSlideIndex = 0;
+      navigate("wallet");
+    }
+    if (name === "new-vaccine") openVaccineModal(id || state.selectedPetId);
+    if (name === "edit-vaccine") openVaccineModal("", id);
+    if (name === "delete-vaccine") deleteVaccine(id);
+    if (name === "view-vaccines") navigate("vaccines");
+    if (name === "edit-owner") openOwnerModal();
+    if (name === "save-travel") openTravelModal();
+    if (name === "new-document") openDocumentModal(id || state.selectedPetId);
+    if (name === "edit-document") openDocumentModal("", id);
+    if (name === "delete-document") deleteDocument(id);
+    if (name === "install") installApp();
+    if (name === "install-help") openInstallHelp();
+    if (name === "toggle-theme") toggleTheme();
+    if (name === "dismiss-install") {
+      state.installDismissed = true;
+      saveState();
+      render();
+    }
+    if (name === "export") exportData();
+    if (name === "import") importData();
+    if (name === "sync-now") syncWithServer("manual");
+    if (name === "reset-demo") resetDemo();
+    if (name === "maps") openMaps(action.dataset.query);
+    if (name === "lookup-cep") lookupCep(action.closest("form"));
+    if (name === "refresh-clinics") loadNearbyClinics(true);
+  }
 
-  if (name === "view") navigate(view);
-  if (name === "auth-view") setAuthView(action.dataset.mode);
-  if (name === "logout") logout();
-  if (name === "drawer") openDrawer();
-  if (name === "close-modal") closeModal();
-  if (name === "new-pet") openPetModal();
-  if (name === "edit-pet") openPetModal(id);
-  if (name === "delete-pet") deletePet(id);
-  if (name === "sign-pet") openSignatureModal(id || state.selectedPetId);
-  if (name === "clear-signature") clearSignaturePad();
-  if (name === "save-signature") saveSignature(id || state.selectedPetId);
-  if (name === "download-wallet-pdf") downloadWalletPdf(id || state.selectedPetId);
-  if (name === "wallet-slide") {
-    const slide = Number(action.dataset.slide);
-    const step = action.classList.contains("wallet-carousel-arrow") ? (slide <= 0 ? -1 : 1) : 0;
-    setWalletSlide(step ? walletSlideIndex + step : slide);
+  const starButton = event.target.closest("[data-rating-value]");
+  if (starButton) {
+    const fieldName = starButton.dataset.ratingField;
+    const input = starButton.closest(".field")?.querySelector(`input[name="${fieldName}"]`);
+    const buttons = starButton.parentElement?.querySelectorAll(".star-button") || [];
+    const value = Number(starButton.dataset.ratingValue || 0);
+    if (input) input.value = String(value);
+    buttons.forEach((button) => {
+      const buttonValue = Number(button.dataset.ratingValue || 0);
+      const isActive = buttonValue <= value;
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-pressed", String(isActive));
+    });
   }
-  if (name === "pet-wallet") {
-    state.selectedPetId = id;
-    walletSlideIndex = 0;
-    navigate("wallet");
-  }
-  if (name === "new-vaccine") openVaccineModal(id || state.selectedPetId);
-  if (name === "edit-vaccine") openVaccineModal("", id);
-  if (name === "delete-vaccine") deleteVaccine(id);
-  if (name === "view-vaccines") navigate("vaccines");
-  if (name === "edit-owner") openOwnerModal();
-  if (name === "save-travel") openTravelModal();
-  if (name === "new-document") openDocumentModal(id || state.selectedPetId);
-  if (name === "edit-document") openDocumentModal("", id);
-  if (name === "delete-document") deleteDocument(id);
-  if (name === "install") installApp();
-  if (name === "install-help") openInstallHelp();
-  if (name === "toggle-theme") toggleTheme();
-  if (name === "dismiss-install") {
-    state.installDismissed = true;
-    saveState();
-    render();
-  }
-  if (name === "export") exportData();
-  if (name === "import") importData();
-  if (name === "sync-now") syncWithServer("manual");
-  if (name === "reset-demo") resetDemo();
-  if (name === "maps") openMaps(action.dataset.query);
-  if (name === "lookup-cep") lookupCep(action.closest("form"));
-  if (name === "refresh-clinics") loadNearbyClinics(true);
 });
 
 document.addEventListener("input", (event) => {
@@ -280,7 +316,10 @@ document.addEventListener("input", (event) => {
   }
 
   if (event.target.matches("[data-travel-check]")) {
-    state.travel.items[event.target.dataset.travelCheck] = event.target.checked;
+    const petId = state.selectedPetId || state.travel.selectedPetId || state.pets[0]?.id || "";
+    const travel = getTravelForPet(petId);
+    travel.items[event.target.dataset.travelCheck] = event.target.checked;
+    setTravelForPet(petId, travel);
     saveState();
     renderTravel();
   }
@@ -319,8 +358,10 @@ document.addEventListener("change", async (event) => {
   }
 
   if (event.target.matches("[data-select-pet]")) {
-    state.selectedPetId = event.target.value;
-    state.travel.selectedPetId = event.target.value;
+    const petId = event.target.value;
+    state.selectedPetId = petId;
+    const travel = getTravelForPet(petId);
+    setTravelForPet(petId, travel);
     saveState();
     render();
   }
@@ -363,12 +404,25 @@ function loadState() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     const baseState = stored ? mergeState(JSON.parse(stored)) : structuredClone(defaultState);
+    const selectedPetId = baseState.selectedPetId && baseState.pets.some((pet) => pet.id === baseState.selectedPetId)
+      ? baseState.selectedPetId
+      : baseState.pets[0]?.id || "";
+    const normalizedTravelByPet = normalizeTravelByPet(baseState.travelByPet || {});
     return {
       ...baseState,
-      currentView: "home"
+      currentView: "home",
+      selectedPetId,
+      travel: normalizeTravelEntry(baseState.travel || getTravelForPet(selectedPetId)),
+      travelByPet: normalizedTravelByPet,
+      feedback: Array.isArray(baseState.feedback) ? baseState.feedback : []
     };
   } catch {
-    return structuredClone(defaultState);
+    const fallback = structuredClone(defaultState);
+    fallback.currentView = "home";
+    fallback.selectedPetId = fallback.pets[0]?.id || "";
+    fallback.travel = normalizeTravelEntry(fallback.travel || blankTravel());
+    fallback.travelByPet = normalizeTravelByPet(fallback.travelByPet || {});
+    return fallback;
   }
 }
 
@@ -380,11 +434,9 @@ function mergeState(partial = {}) {
     sync: { ...defaultState.sync, ...(partial.sync || {}) },
     users: Array.isArray(partial.users) ? partial.users : [],
     owner: normalizeOwner(partial.owner),
-    travel: {
-      ...defaultState.travel,
-      ...(partial.travel || {}),
-      items: { ...defaultState.travel.items, ...((partial.travel || {}).items || {}) }
-    }
+    travel: normalizeTravelEntry(partial.travel || defaultState.travel),
+    travelByPet: normalizeTravelByPet(partial.travelByPet || (partial.travel ? { [partial.travel.selectedPetId || partial.selectedPetId || ""]: partial.travel } : {})),
+    feedback: Array.isArray(partial.feedback) ? partial.feedback : []
   };
 }
 
@@ -552,6 +604,8 @@ function blankStateForUser(user, password = "") {
     vaccines: [],
     documents: [],
     travel: blankTravel(),
+    travelByPet: {},
+    feedback: [],
     users: upsertLocalUser([], user, password),
     auth: {
       ...defaultState.auth,
@@ -716,6 +770,7 @@ function screenTemplate() {
   if (state.currentView === "vaccines") return vaccinesView();
   if (state.currentView === "travel") return travelView();
   if (state.currentView === "clinics") return clinicsView();
+  if (state.currentView === "feedback") return feedbackView();
   if (state.currentView === "settings") return settingsView();
   return homeView();
 }
@@ -748,7 +803,8 @@ function logoSrc() {
 function homeView() {
   const selectedPet = getSelectedPet();
   const upcoming = getVaccines().filter((vaccine) => ["late", "soon"].includes(vaccineStatus(vaccine).type));
-  const progress = travelProgress();
+  const selectedPetId = state.selectedPetId || state.pets[0]?.id || "";
+  const progress = travelProgressForPet(selectedPetId);
   return `
     <div class="hero">
       <div class="hero-copy">
@@ -1447,8 +1503,12 @@ function vaccinesListTemplate() {
 }
 
 function travelView() {
-  const travelPet = state.pets.find((pet) => pet.id === state.travel.selectedPetId) || getSelectedPet();
-  const progress = travelProgress();
+  const selectedPetId = state.selectedPetId || state.travel?.selectedPetId || state.pets[0]?.id || "";
+  const petTravel = getTravelForPet(selectedPetId);
+  state.travel = petTravel;
+  state.travel.selectedPetId = selectedPetId;
+  const travelPet = state.pets.find((pet) => pet.id === selectedPetId) || getSelectedPet();
+  const progress = travelProgressForPet(selectedPetId);
   const items = [
     ["vaccine", "Vacinas conferidas", "Principalmente antirrábica e polivalente"],
     ["certificate", "Atestado de saúde", "Emitido pelo veterinário antes da viagem"],
@@ -1471,15 +1531,15 @@ function travelView() {
         <div class="card">
           <div class="section-title">
             <div>
-              <h2>${escapeHTML(state.travel.destination || "Destino não definido")}</h2>
-              <p class="muted small">${formatDate(state.travel.date)} · ${escapeHTML(state.travel.transport || "Transporte não definido")}</p>
+              <h2>${escapeHTML(petTravel.destination || "Destino não definido")}</h2>
+              <p class="muted small">${formatDate(petTravel.date)} · ${escapeHTML(petTravel.transport || "Transporte não definido")}</p>
             </div>
             <button class="secondary-button" type="button" data-action="save-travel">Editar</button>
           </div>
           <div class="field" style="margin-top: 14px;">
             <label for="travelPet">Pet da viagem</label>
             <select id="travelPet" data-select-pet>
-              ${state.pets.map((pet) => `<option value="${pet.id}" ${travelPet?.id === pet.id ? "selected" : ""}>${escapeHTML(pet.name)}</option>`).join("")}
+              ${state.pets.map((pet) => `<option value="${pet.id}" ${selectedPetId === pet.id ? "selected" : ""}>${escapeHTML(pet.name)}</option>`).join("")}
             </select>
           </div>
           <div class="progress" style="margin-top: 16px;">
@@ -1492,13 +1552,13 @@ function travelView() {
         </div>
         <div class="checklist">
           ${items.map(([key, title, subtitle]) => `
-            <label class="check-item ${state.travel.items[key] ? "done" : ""}">
-              <input type="checkbox" data-travel-check="${key}" ${state.travel.items[key] ? "checked" : ""} />
+            <label class="check-item ${petTravel.items[key] ? "done" : ""}">
+              <input type="checkbox" data-travel-check="${key}" ${petTravel.items[key] ? "checked" : ""} />
               <span>
                 <strong>${title}</strong>
                 <span class="muted small" style="display:block;">${subtitle}</span>
               </span>
-              <span>${state.travel.items[key] ? "✓" : "○"}</span>
+              <span>${petTravel.items[key] ? "✓" : "○"}</span>
             </label>
           `).join("")}
         </div>
@@ -1507,7 +1567,7 @@ function travelView() {
         ${travelPet ? petCard(travelPet, true) : emptyState("◉", "Sem pet", "Cadastre um pet para planejar a viagem.")}
         <div class="card">
           <h2>Anotações</h2>
-          <p class="muted" style="margin-top: 8px;">${escapeHTML(state.travel.notes || "Sem anotações para a viagem.")}</p>
+          <p class="muted" style="margin-top: 8px;">${escapeHTML(petTravel.notes || "Sem anotações para a viagem.")}</p>
         </div>
       </aside>
     </section>
@@ -1725,6 +1785,79 @@ function hasUsableCoordinates(latitude, longitude) {
   const lat = Number(latitude);
   const lon = Number(longitude);
   return Number.isFinite(lat) && lat >= -90 && lat <= 90 && Number.isFinite(lon) && lon >= -180 && lon <= 180;
+}
+
+function feedbackView() {
+  const currentFeedback = state.feedback?.[state.feedback.length - 1] || null;
+  return `
+    <div class="page-head">
+      <span class="eyebrow">Feedback</span>
+      <h1>Avaliação do app e da carteira</h1>
+      <p class="muted">Ajude a melhorar a experiência do app, a clareza das informações da carteira e a qualidade do atendimento veterinário.</p>
+    </div>
+
+    <section class="section screen-grid">
+      <div class="grid">
+        <div class="card feedback-card">
+          <form class="form" data-form="feedback">
+            <div class="feedback-grid">
+              <div class="field">
+                <label>Grau de satisfação com as informações do pet na carteira</label>
+                <div class="star-picker" data-rating-group="veterinarySatisfaction">
+                  ${[1, 2, 3, 4, 5].map((value) => `<button type="button" class="star-button ${Number(currentFeedback?.veterinarySatisfaction || 0) >= value ? "active" : ""}" data-rating-value="${value}" data-rating-field="veterinarySatisfaction" aria-label="${value} estrela${value > 1 ? "s" : ""}">★</button>`).join("")}
+                </div>
+                <input type="hidden" name="veterinarySatisfaction" value="${Number(currentFeedback?.veterinarySatisfaction || 0)}" />
+              </div>
+
+              <div class="field">
+                <label>Avaliação geral do app</label>
+                <div class="star-picker" data-rating-group="appRating">
+                  ${[1, 2, 3, 4, 5].map((value) => `<button type="button" class="star-button ${Number(currentFeedback?.appRating || 0) >= value ? "active" : ""}" data-rating-value="${value}" data-rating-field="appRating" aria-label="${value} estrela${value > 1 ? "s" : ""}">★</button>`).join("")}
+                </div>
+                <input type="hidden" name="appRating" value="${Number(currentFeedback?.appRating || 0)}" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="feedback-improvements">O que pode ficar melhor?</label>
+              <textarea id="feedback-improvements" name="improvements" placeholder="Descreva o que pode melhorar na experiência do usuário, nas informações do pet ou na usabilidade do app.">${escapeHTML(currentFeedback?.improvements || "")}</textarea>
+            </div>
+
+            <div class="field">
+              <label for="feedback-suggestions">Sugestões e melhorias</label>
+              <textarea id="feedback-suggestions" name="suggestions" placeholder="Compartilhe ideias, sugestões de campos extras, consultas, documentos ou melhorias de layout.">${escapeHTML(currentFeedback?.suggestions || "")}</textarea>
+            </div>
+
+            <div class="button-row">
+              <button class="primary-button" type="submit">Salvar avaliação</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <aside class="grid">
+        <div class="card">
+          <h2>Último feedback</h2>
+          <div class="detail-list" style="margin-top: 12px;">
+            ${currentFeedback ? `
+              <div class="detail-row"><span class="detail-label">Informações do pet</span><span class="detail-value">${escapeHTML(currentFeedback.veterinarySatisfaction ? `${currentFeedback.veterinarySatisfaction}/5` : "Sem avaliação")}</span></div>
+              <div class="detail-row"><span class="detail-label">Avaliação do app</span><span class="detail-value">${escapeHTML(currentFeedback.appRating ? `${currentFeedback.appRating}/5` : "Sem avaliação")}</span></div>
+              <div class="detail-row"><span class="detail-label">Enviado em</span><span class="detail-value">${escapeHTML(currentFeedback.submittedAt ? formatDateTime(currentFeedback.submittedAt) : "Ainda não enviado")}</span></div>
+              <div class="detail-row"><span class="detail-label">Sugestões</span><span class="detail-value">${escapeHTML(currentFeedback.suggestions || "Sem sugestões")}</span></div>
+            ` : `
+              <div class="empty-state">
+                <span class="empty-icon">★</span>
+                <div>
+                  <h2>Ainda não há avaliação</h2>
+                  <p class="muted">Envie sua análise para melhorar as informações da carteira e a experiência do app.</p>
+                </div>
+              </div>
+            `}
+          </div>
+        </div>
+      </aside>
+    </section>
+  `;
 }
 
 function settingsView() {
@@ -2332,6 +2465,8 @@ function openDocumentModal(petId = "", documentId = "") {
 }
 
 function openTravelModal() {
+  const selectedPetId = state.selectedPetId || state.travel?.selectedPetId || state.pets[0]?.id || "";
+  const activeTravel = getTravelForPet(selectedPetId);
   openModal(`
     <div class="modal-head">
       <h2>Plano de viagem</h2>
@@ -2340,12 +2475,12 @@ function openTravelModal() {
     <div class="modal-body">
       <form class="form" data-form="travel">
         <div class="form-grid two">
-          ${petSelectField("Pet", "selectedPetId", state.travel.selectedPetId || state.selectedPetId)}
-          ${field("Destino", "destination", state.travel.destination, "text", true)}
-          ${field("Data", "date", state.travel.date, "date")}
-          ${selectField("Transporte", "transport", state.travel.transport, ["Carro", "Ônibus", "Avião", "Hospedagem", "Outro"])}
+          ${petSelectField("Pet", "selectedPetId", selectedPetId)}
+          ${field("Destino", "destination", activeTravel.destination, "text", true)}
+          ${field("Data", "date", activeTravel.date, "date")}
+          ${selectField("Transporte", "transport", activeTravel.transport, ["Carro", "Ônibus", "Avião", "Hospedagem", "Outro"])}
         </div>
-        ${textareaField("Anotações", "notes", state.travel.notes)}
+        ${textareaField("Anotações", "notes", activeTravel.notes)}
         <button class="primary-button" type="submit">Salvar viagem</button>
       </form>
     </div>
@@ -2356,6 +2491,7 @@ function openDrawer() {
   const drawer = document.createElement("div");
   drawer.className = "drawer-backdrop";
   drawer.dataset.modal = "drawer";
+  const drawerViews = [...views, { id: "feedback", label: "Feedback", icon: "★" }, { id: "settings", label: "Configurações", icon: "⚙" }];
   drawer.innerHTML = `
     <aside class="drawer">
       <div class="drawer-head">
@@ -2382,7 +2518,7 @@ function openDrawer() {
         <button type="button" data-action="logout">
           <span>↩</span> Sair da conta
         </button>
-        ${[...views, { id: "settings", label: "Configurações", icon: "⚙" }].map((view) => `
+        ${drawerViews.map((view) => `
           <button class="${state.currentView === view.id ? "active" : ""}" type="button" data-action="view" data-view="${view.id}">
             <span>${view.icon}</span> ${view.label}
           </button>
@@ -2791,6 +2927,62 @@ function blankTravel() {
   };
 }
 
+function normalizeTravelEntry(entry = {}) {
+  const base = blankTravel();
+  const items = { ...base.items, ...((entry.items && typeof entry.items === "object") ? entry.items : {}) };
+  return {
+    ...base,
+    ...entry,
+    items,
+    selectedPetId: entry.selectedPetId || "",
+    transport: entry.transport || base.transport
+  };
+}
+
+function normalizeTravelByPet(entries = {}) {
+  const normalized = {};
+  for (const [petId, petTravel] of Object.entries(entries || {})) {
+    if (!petId) continue;
+    normalized[petId] = normalizeTravelEntry(petTravel || {});
+    normalized[petId].selectedPetId = petId;
+  }
+  return normalized;
+}
+
+function getTravelForPet(petId = "") {
+  const id = petId || state.selectedPetId || state.travel?.selectedPetId || state.pets[0]?.id || "";
+  const saved = state.travelByPet && state.travelByPet[id];
+  if (saved) return normalizeTravelEntry(saved);
+  return normalizeTravelEntry({ selectedPetId: id });
+}
+
+function setTravelForPet(petId = "", nextTravel = {}) {
+  const id = petId || state.selectedPetId || state.travel?.selectedPetId || state.pets[0]?.id || "";
+  if (!id) return blankTravel();
+  const current = getTravelForPet(id);
+  const normalized = normalizeTravelEntry({
+    ...current,
+    ...nextTravel,
+    selectedPetId: id,
+    items: {
+      ...blankTravel().items,
+      ...current.items,
+      ...((nextTravel.items && typeof nextTravel.items === "object") ? nextTravel.items : {})
+    }
+  });
+  state.travelByPet[id] = normalized;
+  state.travel = normalized;
+  state.travel.selectedPetId = id;
+  return normalized;
+}
+
+function travelProgressForPet(petId = "") {
+  const id = petId || state.selectedPetId || state.travel?.selectedPetId || "";
+  const items = Object.values(getTravelForPet(id).items || {});
+  if (!items.length) return 0;
+  return Math.round((items.filter(Boolean).length / items.length) * 100);
+}
+
 async function handleForm(form) {
   const data = Object.fromEntries(new FormData(form).entries());
   const type = form.dataset.form;
@@ -2871,9 +3063,35 @@ async function handleForm(form) {
   }
 
   if (type === "travel") {
-    state.travel = { ...state.travel, ...data };
-    state.selectedPetId = data.selectedPetId;
+    const selectedPetId = String(data.selectedPetId || state.selectedPetId || state.pets[0]?.id || "").trim();
+    const currentTravel = getTravelForPet(selectedPetId);
+    const nextTravel = {
+      ...currentTravel,
+      ...data,
+      selectedPetId,
+      items: {
+        ...blankTravel().items,
+        ...currentTravel.items,
+        ...((data.items && typeof data.items === "object") ? data.items : {})
+      }
+    };
+    setTravelForPet(selectedPetId, nextTravel);
+    state.selectedPetId = selectedPetId;
     notify("Plano de viagem atualizado.");
+  }
+
+  if (type === "feedback") {
+    const submission = {
+      id: createId("feedback"),
+      submittedAt: new Date().toISOString(),
+      veterinarySatisfaction: Number(data.veterinarySatisfaction || 0),
+      appRating: Number(data.appRating || 0),
+      improvements: String(data.improvements || "").trim(),
+      suggestions: String(data.suggestions || "").trim(),
+      petId: state.selectedPetId || state.pets[0]?.id || ""
+    };
+    state.feedback = Array.isArray(state.feedback) ? [...state.feedback, submission] : [submission];
+    notify("Avaliação salva com sucesso.");
   }
 
   saveState();
@@ -3755,9 +3973,7 @@ function vaccineStatus(vaccine) {
 }
 
 function travelProgress() {
-  const items = Object.values(state.travel.items);
-  if (!items.length) return 0;
-  return Math.round((items.filter(Boolean).length / items.length) * 100);
+  return travelProgressForPet(state.selectedPetId || state.travel?.selectedPetId || state.pets[0]?.id || "");
 }
 
 function ownerAddress() {

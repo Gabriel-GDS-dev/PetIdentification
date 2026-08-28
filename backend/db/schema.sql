@@ -99,21 +99,37 @@ ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_size INTEGER NOT N
 ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_data TEXT NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS pet_travel_plans (
-  user_id TEXT PRIMARY KEY REFERENCES pet_app_users(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES pet_app_users(id) ON DELETE CASCADE,
+  pet_id TEXT NOT NULL,
   destination TEXT NOT NULL DEFAULT '',
   travel_date DATE,
   transport TEXT NOT NULL DEFAULT '',
   selected_pet_id TEXT NOT NULL DEFAULT '',
   notes TEXT NOT NULL DEFAULT '',
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, pet_id)
 );
 
 CREATE TABLE IF NOT EXISTS pet_travel_items (
   user_id TEXT NOT NULL REFERENCES pet_app_users(id) ON DELETE CASCADE,
+  pet_id TEXT NOT NULL,
   item_key TEXT NOT NULL,
   checked BOOLEAN NOT NULL DEFAULT false,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, item_key)
+  PRIMARY KEY (user_id, pet_id, item_key)
+);
+
+CREATE TABLE IF NOT EXISTS pet_feedback (
+  user_id TEXT NOT NULL REFERENCES pet_app_users(id) ON DELETE CASCADE,
+  id TEXT NOT NULL,
+  pet_id TEXT NOT NULL DEFAULT '',
+  veterinary_satisfaction INTEGER NOT NULL DEFAULT 0,
+  app_rating INTEGER NOT NULL DEFAULT 0,
+  improvements TEXT NOT NULL DEFAULT '',
+  suggestions TEXT NOT NULL DEFAULT '',
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS pet_wallet_states (
@@ -169,6 +185,11 @@ FOR EACH ROW EXECUTE FUNCTION pet_set_updated_at();
 DROP TRIGGER IF EXISTS pet_travel_items_updated_at ON pet_travel_items;
 CREATE TRIGGER pet_travel_items_updated_at
 BEFORE UPDATE ON pet_travel_items
+FOR EACH ROW EXECUTE FUNCTION pet_set_updated_at();
+
+DROP TRIGGER IF EXISTS pet_feedback_updated_at ON pet_feedback;
+CREATE TRIGGER pet_feedback_updated_at
+BEFORE UPDATE ON pet_feedback
 FOR EACH ROW EXECUTE FUNCTION pet_set_updated_at();
 
 DROP TRIGGER IF EXISTS pet_wallet_states_updated_at ON pet_wallet_states;
