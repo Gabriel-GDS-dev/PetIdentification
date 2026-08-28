@@ -362,8 +362,11 @@ function init() {
 function loadState() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return structuredClone(defaultState);
-    return mergeState(JSON.parse(stored));
+    const baseState = stored ? mergeState(JSON.parse(stored)) : structuredClone(defaultState);
+    return {
+      ...baseState,
+      currentView: "home"
+    };
   } catch {
     return structuredClone(defaultState);
   }
