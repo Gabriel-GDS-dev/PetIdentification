@@ -248,9 +248,14 @@ document.addEventListener("click", (event) => {
     navigate("wallet");
   }
   if (name === "new-vaccine") openVaccineModal(id || state.selectedPetId);
+  if (name === "edit-vaccine") openVaccineModal("", id);
+  if (name === "delete-vaccine") deleteVaccine(id);
+  if (name === "view-vaccines") navigate("vaccines");
   if (name === "edit-owner") openOwnerModal();
   if (name === "save-travel") openTravelModal();
   if (name === "new-document") openDocumentModal(id || state.selectedPetId);
+  if (name === "edit-document") openDocumentModal("", id);
+  if (name === "delete-document") deleteDocument(id);
   if (name === "install") installApp();
   if (name === "install-help") openInstallHelp();
   if (name === "toggle-theme") toggleTheme();
@@ -1893,6 +1898,11 @@ function vaccineItem(vaccine) {
         ${detailRow("Veterinário", vaccine.veterinarian)}
         ${detailRow("Lote", vaccine.batch)}
       </div>
+      <div class="button-row" style="margin-top: 12px;">
+        <button class="secondary-button" type="button" data-action="view-vaccines">Ver todas</button>
+        <button class="ghost-button" type="button" data-action="edit-vaccine" data-id="${vaccine.id}">Editar</button>
+        <button class="danger-button" type="button" data-action="delete-vaccine" data-id="${vaccine.id}">Excluir</button>
+      </div>
     </article>
   `;
 }
@@ -1912,6 +1922,10 @@ function documentItem(doc) {
         </div>
         <p class="muted small">${escapeHTML(doc.notes || "Sem observações.")}</p>
         ${attachment ? `<p class="muted small">${escapeHTML(attachment.name)} · ${formatFileSize(attachment.size)}</p>` : ""}
+        <div class="button-row" style="margin-top: 12px;">
+          <button class="ghost-button" type="button" data-action="edit-document" data-id="${doc.id}">Editar</button>
+          <button class="danger-button" type="button" data-action="delete-document" data-id="${doc.id}">Excluir</button>
+        </div>
       </div>
     </article>
   `;
@@ -2243,54 +2257,60 @@ function setFormValue(form, name, value) {
   if (input) input.value = value ?? "";
 }
 
-function openVaccineModal(petId = "") {
-  const selected = petId || state.selectedPetId || state.pets[0]?.id || "";
+function openVaccineModal(petId = "", vaccineId = "") {
+  const vaccine = vaccineId ? state.vaccines.find((item) => item.id === vaccineId) : null;
+  const selected = vaccine?.petId || petId || state.selectedPetId || state.pets[0]?.id || "";
   openModal(`
     <div class="modal-head">
-      <h2>Nova vacina</h2>
+      <h2>${vaccine ? "Editar vacina" : "Nova vacina"}</h2>
       <button class="icon-button" type="button" data-action="close-modal" aria-label="Fechar">×</button>
     </div>
     <div class="modal-body">
       <form class="form" data-form="vaccine">
+        ${vaccine ? `<input type="hidden" name="id" value="${escapeHTML(vaccine.id)}" />` : ""}
         <div class="form-grid two">
           ${petSelectField("Pet", "petId", selected)}
-          ${field("Vacina", "name", "", "text", true)}
-          ${field("Dose", "dose", "")}
-          ${field("Data da aplicação", "applicationDate", todayISO, "date")}
-          ${field("Próxima dose", "dueDate", "", "date", true)}
-          ${field("Clínica", "clinic", "")}
-          ${field("Veterinário", "veterinarian", "")}
-          ${field("Lote", "batch", "")}
+          ${field("Vacina", "name", vaccine?.name || "", "text", true)}
+          ${field("Dose", "dose", vaccine?.dose || "")}
+          ${field("Data da aplicação", "applicationDate", vaccine?.applicationDate || todayISO, "date")}
+          ${field("Próxima dose", "dueDate", vaccine?.dueDate || "", "date", true)}
+          ${field("Clínica", "clinic", vaccine?.clinic || "")}
+          ${field("Veterinário", "veterinarian", vaccine?.veterinarian || "")}
+          ${field("Lote", "batch", vaccine?.batch || "")}
         </div>
-        ${textareaField("Observações", "notes", "")}
-        <button class="primary-button" type="submit">Salvar vacina</button>
+        ${textareaField("Observações", "notes", vaccine?.notes || "")}
+        <div class="button-row">
+          <button class="primary-button" type="submit">${vaccine ? "Salvar alterações" : "Salvar vacina"}</button>
+          ${vaccine ? `<button class="danger-button" type="button" data-action="delete-vaccine" data-id="${vaccine.id}">Excluir</button>` : ""}
+        </div>
       </form>
     </div>
   `);
 }
 
-function openDocumentModal(petId = "") {
-  const selected = petId || state.selectedPetId || state.pets[0]?.id || "";
+function openDocumentModal(petId = "", documentId = "") {
+  const doc = documentId ? state.documents.find((item) => item.id === documentId) : null;
+  const selected = doc?.petId || petId || state.selectedPetId || state.pets[0]?.id || "";
   const fileInputId = createId("document-file");
   openModal(`
     <div class="modal-head">
-      <h2>Novo documento</h2>
+      <h2>${doc ? "Editar documento" : "Novo documento"}</h2>
       <button class="icon-button" type="button" data-action="close-modal" aria-label="Fechar">×</button>
     </div>
     <div class="modal-body">
       <form class="form" data-form="document">
+        ${doc ? `<input type="hidden" name="id" value="${escapeHTML(doc.id)}" />` : ""}
         <div class="form-grid two">
           ${petSelectField("Pet", "petId", selected)}
-          ${field("Título", "title", "", "text", true)}
-          ${selectField("Tipo", "kind", "Viagem", ["Viagem", "Exame", "Receita", "Atestado", "Outro"])}
-          ${field("Data", "date", todayISO, "date")}
-          ${field("Validade", "expiresAt", "", "date")}
+          ${field("Título", "title", doc?.title || "", "text", true)}
+          ${selectField("Tipo", "kind", doc?.kind || "Viagem", ["Viagem", "Exame", "Receita", "Atestado", "Outro"])}
+          ${field("Data", "date", doc?.date || todayISO, "date")}
+          ${field("Validade", "expiresAt", doc?.expiresAt || "", "date")}
         </div>
-        <input type="hidden" name="attachment" value="" data-document-attachment-value />
+        <input type="hidden" name="attachment" value='${escapeHTML(JSON.stringify(doc?.attachment || {}))}' data-document-attachment-value />
         <div class="document-upload">
-          <div class="document-upload-preview empty" data-document-attachment-preview>
-            <span>PDF</span>
-            <strong>Nenhum arquivo anexado</strong>
+          <div class="document-upload-preview ${doc?.attachment ? "" : "empty"}" data-document-attachment-preview>
+            ${doc?.attachment ? documentAttachmentPreview(doc.attachment, "upload") : `<span>PDF</span><strong>Nenhum arquivo anexado</strong>`}
           </div>
           <div class="document-upload-actions">
             <label class="secondary-button" for="${fileInputId}">Anexar documento</label>
@@ -2298,8 +2318,11 @@ function openDocumentModal(petId = "") {
             <p class="muted small">Use foto/scan do documento ou PDF de atestado, exame, receita e viagem.</p>
           </div>
         </div>
-        ${textareaField("Observações", "notes", "")}
-        <button class="primary-button" type="submit">Salvar documento</button>
+        ${textareaField("Observações", "notes", doc?.notes || "")}
+        <div class="button-row">
+          <button class="primary-button" type="submit">${doc ? "Salvar alterações" : "Salvar documento"}</button>
+          ${doc ? `<button class="danger-button" type="button" data-action="delete-document" data-id="${doc.id}">Excluir</button>` : ""}
+        </div>
       </form>
     </div>
   `);
@@ -2805,15 +2828,31 @@ async function handleForm(form) {
   }
 
   if (type === "vaccine") {
-    state.vaccines.push({ ...data, id: createId("vac") });
+    const vaccineId = data.id || createId("vac");
+    const vaccineIndex = state.vaccines.findIndex((item) => item.id === vaccineId);
+    const nextVaccine = {
+      ...data,
+      id: vaccineId,
+      petId: data.petId,
+      name: String(data.name || "").trim(),
+      dose: String(data.dose || "").trim(),
+      clinic: String(data.clinic || "").trim(),
+      veterinarian: String(data.veterinarian || "").trim(),
+      batch: String(data.batch || "").trim(),
+      notes: String(data.notes || "").trim()
+    };
+    if (vaccineIndex >= 0) state.vaccines[vaccineIndex] = nextVaccine;
+    else state.vaccines.push(nextVaccine);
     state.selectedPetId = data.petId;
-    notify("Vacina registrada.");
+    notify(vaccineIndex >= 0 ? "Vacina atualizada." : "Vacina registrada.");
   }
 
   if (type === "document") {
+    const documentId = data.id || createId("doc");
+    const documentIndex = state.documents.findIndex((item) => item.id === documentId);
     const attachment = documentAttachmentFromForm(data);
-    state.documents.push({
-      id: createId("doc"),
+    const nextDocument = {
+      id: documentId,
       petId: data.petId,
       title: data.title,
       kind: data.kind,
@@ -2821,9 +2860,11 @@ async function handleForm(form) {
       expiresAt: data.expiresAt,
       notes: data.notes,
       attachment
-    });
+    };
+    if (documentIndex >= 0) state.documents[documentIndex] = nextDocument;
+    else state.documents.push(nextDocument);
     state.selectedPetId = data.petId;
-    notify("Documento salvo.");
+    notify(documentIndex >= 0 ? "Documento atualizado." : "Documento salvo.");
   }
 
   if (type === "travel") {
@@ -2849,6 +2890,30 @@ function deletePet(id) {
   saveState();
   closeModal();
   notify("Pet removido.");
+  render();
+}
+
+function deleteVaccine(id) {
+  const vaccine = state.vaccines.find((item) => item.id === id);
+  if (!vaccine) return;
+  const confirmed = confirm(`Excluir a vacina ${vaccine.name}?`);
+  if (!confirmed) return;
+  state.vaccines = state.vaccines.filter((item) => item.id !== id);
+  saveState();
+  closeModal();
+  notify("Vacina removida.");
+  render();
+}
+
+function deleteDocument(id) {
+  const doc = state.documents.find((item) => item.id === id);
+  if (!doc) return;
+  const confirmed = confirm(`Excluir o documento ${doc.title}?`);
+  if (!confirmed) return;
+  state.documents = state.documents.filter((item) => item.id !== id);
+  saveState();
+  closeModal();
+  notify("Documento removido.");
   render();
 }
 
