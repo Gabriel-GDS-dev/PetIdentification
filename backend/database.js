@@ -57,10 +57,30 @@ async function ensureDatabase(databaseUrl = getDatabaseUrl()) {
   }
 }
 
+const MIGRATION_SQL = `
+  ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS pet_id TEXT NOT NULL DEFAULT '';
+  ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS destination TEXT NOT NULL DEFAULT '';
+  ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS travel_date DATE;
+  ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS transport TEXT NOT NULL DEFAULT '';
+  ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS selected_pet_id TEXT NOT NULL DEFAULT '';
+  ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
+
+  ALTER TABLE pet_travel_items ADD COLUMN IF NOT EXISTS pet_id TEXT NOT NULL DEFAULT '';
+  ALTER TABLE pet_travel_items ADD COLUMN IF NOT EXISTS item_key TEXT NOT NULL DEFAULT '';
+  ALTER TABLE pet_travel_items ADD COLUMN IF NOT EXISTS checked BOOLEAN NOT NULL DEFAULT false;
+
+  ALTER TABLE pet_travel_plans DROP CONSTRAINT IF EXISTS pet_travel_plans_pkey;
+  ALTER TABLE pet_travel_plans ADD CONSTRAINT pet_travel_plans_pkey PRIMARY KEY (user_id, pet_id);
+
+  ALTER TABLE pet_travel_items DROP CONSTRAINT IF EXISTS pet_travel_items_pkey;
+  ALTER TABLE pet_travel_items ADD CONSTRAINT pet_travel_items_pkey PRIMARY KEY (user_id, pet_id, item_key);
+`;
+
 async function applySchema(pool) {
   const schemaPath = path.join(__dirname, "db", "schema.sql");
   const schema = await fs.readFile(schemaPath, "utf8");
   await pool.query(schema);
+  await pool.query(MIGRATION_SQL);
 }
 
 async function createPoolWithSchema() {

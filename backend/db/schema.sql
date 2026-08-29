@@ -110,6 +110,15 @@ CREATE TABLE IF NOT EXISTS pet_travel_plans (
   PRIMARY KEY (user_id, pet_id)
 );
 
+ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS pet_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS destination TEXT NOT NULL DEFAULT '';
+ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS travel_date DATE;
+ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS transport TEXT NOT NULL DEFAULT '';
+ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS selected_pet_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
+ALTER TABLE pet_travel_plans DROP CONSTRAINT IF EXISTS pet_travel_plans_pkey;
+ALTER TABLE pet_travel_plans ADD CONSTRAINT pet_travel_plans_pkey PRIMARY KEY (user_id, pet_id);
+
 CREATE TABLE IF NOT EXISTS pet_travel_items (
   user_id TEXT NOT NULL REFERENCES pet_app_users(id) ON DELETE CASCADE,
   pet_id TEXT NOT NULL,
@@ -118,6 +127,12 @@ CREATE TABLE IF NOT EXISTS pet_travel_items (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, pet_id, item_key)
 );
+
+ALTER TABLE pet_travel_items ADD COLUMN IF NOT EXISTS pet_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE pet_travel_items ADD COLUMN IF NOT EXISTS item_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE pet_travel_items ADD COLUMN IF NOT EXISTS checked BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE pet_travel_items DROP CONSTRAINT IF EXISTS pet_travel_items_pkey;
+ALTER TABLE pet_travel_items ADD CONSTRAINT pet_travel_items_pkey PRIMARY KEY (user_id, pet_id, item_key);
 
 CREATE TABLE IF NOT EXISTS pet_feedback (
   user_id TEXT NOT NULL REFERENCES pet_app_users(id) ON DELETE CASCADE,

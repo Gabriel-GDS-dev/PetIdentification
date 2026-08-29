@@ -802,7 +802,7 @@ function logoSrc() {
 
 function homeView() {
   const selectedPet = getSelectedPet();
-  const upcoming = getVaccines().filter((vaccine) => ["late", "soon"].includes(vaccineStatus(vaccine).type));
+  const upcoming = getVaccines().filter((vaccine) => ["late", "soon"].includes(vaccineFilterKey(vaccine)));
   const selectedPetId = state.selectedPetId || state.pets[0]?.id || "";
   const progress = travelProgressForPet(selectedPetId);
   return `
@@ -1493,7 +1493,7 @@ function filterLabel(value) {
 function vaccinesListTemplate() {
   const vaccines = getVaccines().filter((vaccine) => {
     if (vaccineFilter === "all") return true;
-    return vaccineStatus(vaccine).type === vaccineFilter;
+    return vaccineFilterKey(vaccine) === vaccineFilter;
   });
 
   if (!vaccines.length) {
@@ -1984,7 +1984,7 @@ function quickAction(view, icon, title, subtitle) {
 
 function petCard(pet, compact = false) {
   const vaccines = getVaccines(pet.id);
-  const alertCount = vaccines.filter((vaccine) => ["late", "soon"].includes(vaccineStatus(vaccine).type)).length;
+  const alertCount = vaccines.filter((vaccine) => ["late", "soon"].includes(vaccineFilterKey(vaccine))).length;
   return `
     <article class="pet-card">
       <div class="pet-top">
@@ -3963,13 +3963,18 @@ function getSelectedPet() {
   return state.pets.find((pet) => pet.id === state.selectedPetId) || state.pets[0] || null;
 }
 
+function vaccineFilterKey(vaccine) {
+  const status = vaccineStatus(vaccine);
+  return status.filterKey || status.type;
+}
+
 function vaccineStatus(vaccine) {
-  if (!vaccine.dueDate) return { type: "warn", label: "Sem data" };
+  if (!vaccine.dueDate) return { type: "warn", filterKey: "soon", label: "Sem data" };
   const due = new Date(`${vaccine.dueDate}T12:00:00`);
   const diffDays = Math.ceil((due - now) / 86400000);
-  if (diffDays < 0) return { type: "danger", label: "Vencida" };
-  if (diffDays <= 30) return { type: "warn", label: `${diffDays} dia${diffDays === 1 ? "" : "s"}` };
-  return { type: "ok", label: "Em dia" };
+  if (diffDays < 0) return { type: "danger", filterKey: "late", label: "Vencida" };
+  if (diffDays <= 30) return { type: "warn", filterKey: "soon", label: `${diffDays} dia${diffDays === 1 ? "" : "s"}` };
+  return { type: "ok", filterKey: "ok", label: "Em dia" };
 }
 
 function travelProgress() {
