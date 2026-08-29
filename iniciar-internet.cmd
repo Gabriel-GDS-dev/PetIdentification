@@ -6,7 +6,7 @@ echo.
 echo Este modo deixa o app acessivel fora do seu Wi-Fi usando HTTPS.
 echo Deixe esta janela aberta enquanto quiser usar na faculdade.
 echo.
-call npm.cmd run internet
+call npm run internet
 echo.
 echo O aplicativo publico foi encerrado. Pressione qualquer tecla para fechar.
 pause >nul

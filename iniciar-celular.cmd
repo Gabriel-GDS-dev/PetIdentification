@@ -10,7 +10,7 @@ echo - Use no celular o endereco mostrado no terminal.
 echo.
 echo Iniciando banco e servidor...
 echo.
-call npm.cmd run celular
+call npm run celular
 echo.
 echo O aplicativo foi encerrado. Pressione qualquer tecla para fechar.
 pause >nul
