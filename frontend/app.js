@@ -5,6 +5,7 @@ inject();
 injectSpeedInsights();
 
 const STORAGE_KEY = "pet-id-wallet-state-v1";
+const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v2";
 const APP_NAME = "Identificação Pet";
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
@@ -230,6 +231,43 @@ window.addEventListener("appinstalled", () => {
 window.addEventListener("online", () => syncWithServer("online"));
 window.addEventListener("offline", () => markSyncOffline("Sem conexão com a internet."));
 
+document.addEventListener(
+  "click",
+  (event) => {
+    const action = event.target.closest("[data-action]");
+    if (!action) return;
+
+    const name = action.dataset.action;
+    if (name === "view" && action.dataset.view) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      navigate(action.dataset.view);
+      return;
+    }
+
+    if (name === "view-vaccines") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      navigate("vaccines");
+      return;
+    }
+
+    if (name === "open-feedback" || name === "feedback") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      navigate("feedback");
+      return;
+    }
+
+    if (name === "toggle-theme") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      toggleTheme();
+    }
+  },
+  true
+);
+
 document.addEventListener("submit", async (event) => {
   const form = event.target.closest("form[data-form]");
   if (!form) return;
@@ -399,11 +437,67 @@ document.addEventListener("keydown", (event) => {
 init();
 
 function init() {
+  installLegacyStyleGuard();
+  removeLegacyPetRecordActions();
+  clearLegacyCaches();
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+    navigator.serviceWorker
+      .register("./service-worker.js")
+      .then((registration) => {
+        registration.update?.();
+        if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
+      })
+      .catch(() => {});
+
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
   }
   render();
   syncWithServer("startup", { silent: true });
+}
+
+function installLegacyStyleGuard() {
+  if (document.querySelector("[data-legacy-pet-actions-guard]")) return;
+  const style = document.createElement("style");
+  style.dataset.legacyPetActionsGuard = "true";
+  style.textContent = `
+    .pet-record-actions,
+    [data-pet-record-action] {
+      display: none !important;
+    }
+  `;
+  document.head.append(style);
+}
+
+function removeLegacyPetRecordActions() {
+  document.querySelectorAll(".pet-record-actions, [data-pet-record-action]").forEach((item) => item.remove());
+  document.querySelectorAll("[data-pet-record-ready], [data-pet-record-entry], [data-pet-record-keep-alive]").forEach((item) => {
+    item.classList.remove("pet-action-card");
+    item.removeAttribute("data-pet-record-ready");
+    item.removeAttribute("data-pet-record-entry");
+    item.removeAttribute("data-pet-record-keep-alive");
+    item.removeAttribute("data-pet-record-keep-alive-click");
+    item.removeAttribute("data-pet-record-card");
+    if (item.matches(".card, .document-card, .timeline-item")) {
+      item.removeAttribute("role");
+      item.removeAttribute("tabindex");
+    }
+  });
+}
+
+async function clearLegacyCaches() {
+  if (!("caches" in window) || localStorage.getItem(LEGACY_CLEANUP_KEY) === "done") return;
+  try {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((key) => /^identificcao-pet-v2[0-6]$/.test(key)).map((key) => caches.delete(key)));
+    localStorage.setItem(LEGACY_CLEANUP_KEY, "done");
+  } catch {
+    // Best-effort cleanup for installed/mobile PWAs.
+  }
 }
 
 function loadState() {
@@ -654,6 +748,7 @@ function stateForServer() {
 function render() {
   applyTheme();
   app.innerHTML = isAuthenticated() ? layout(screenTemplate()) : authView();
+  removeLegacyPetRecordActions();
   if (state.currentView === "wallet") requestAnimationFrame(() => setWalletSlide(walletSlideIndex, false));
   if (state.currentView === "clinics" && clinicsStatus === "idle") requestAnimationFrame(() => loadNearbyClinics());
 }
