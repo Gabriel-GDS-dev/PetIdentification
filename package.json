@@ -2,6 +2,12 @@
   "name": "pet-identification-workspace",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  },
   "scripts": {
     "db:start": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File backend\\scripts\\start-local-db.ps1",
     "android:prepare": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File backend\\scripts\\prepare-android.ps1",
@@ -12,6 +18,7 @@
     "celular:usb": "npm.cmd run db:start && npm.cmd run android:prepare && npm.cmd --prefix backend start",
     "dev": "npm.cmd run db:start && npm.cmd --prefix backend run dev",
     "predb:setup": "npm.cmd run db:start",
-    "db:setup": "npm.cmd --prefix backend run db:setup"
+    "db:setup": "npm.cmd --prefix backend run db:setup",
+    "build": "node -e \"console.log('Frontend estatico pronto para a Vercel')\""
   }
 }

@@ -154,6 +154,47 @@ Para usar outro PostgreSQL, defina a conexão antes dos comandos:
 $env:DATABASE_URL="postgres://USUARIO:SENHA@SERVIDOR:5432/pet_identification"
 ```
 
+## Deploy pelo GitHub na Vercel
+
+O repositório já está preparado para a Vercel:
+
+- `frontend/` é publicado como site estático/PWA.
+- `api/[...path].js` executa a API Node como Function serverless.
+- A API usa PostgreSQL gerenciado por `DATABASE_URL`; não use o PostgreSQL local no deploy.
+
+### 1. Subir o projeto para o GitHub
+
+Na raiz do projeto:
+
+```powershell
+git add .
+git commit -m "Preparar deploy na Vercel"
+git push origin main
+```
+
+Nunca adicione `.env`, senhas ou `DATABASE_URL` real ao repositório. Use `.env.example` apenas como referência.
+
+### 2. Criar o projeto na Vercel
+
+1. Acesse **Add New > Project** e importe o repositório do GitHub.
+2. Mantenha a raiz do projeto como **Root Directory**.
+3. Use o preset **Other** (o `vercel.json` já define as rotas).
+4. Em **Environment Variables**, adicione `DATABASE_URL` e `SESSION_SECRET` para **Production**, **Preview** e **Development**.
+5. Faça o deploy.
+
+`SESSION_SECRET` deve ser um segredo aleatório longo e igual entre os deploys. `DATABASE_URL` deve apontar para um PostgreSQL acessível pela internet e com SSL quando o provedor exigir. O schema é aplicado automaticamente quando a Function inicializa.
+
+### 3. Validar após o deploy
+
+Abra estas URLs usando o domínio da Vercel:
+
+```text
+https://SEU-DOMINIO.vercel.app/
+https://SEU-DOMINIO.vercel.app/api/health
+```
+
+O segundo endereço deve responder JSON com `"ok": true`. Se a API retornar erro de banco, confira a URL, permissões e SSL do PostgreSQL no painel da Vercel.
+
 ## Funcionalidades principais
 
 - Carteira animal com frente e verso inspirada nos exemplos enviados.

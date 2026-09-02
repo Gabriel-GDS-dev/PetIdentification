@@ -7,7 +7,7 @@ const { createPoolWithSchema, formatDatabaseError, getDatabaseName, getDatabaseU
 
 const PORT = Number(process.env.PORT || 5241);
 const HOST = process.env.HOST || "0.0.0.0";
-const SESSION_SECRET = process.env.SESSION_SECRET || "pet-identification-dev-secret";
+const SESSION_SECRET = process.env.SESSION_SECRET || (process.env.VERCEL ? "" : "pet-identification-dev-secret");
 const MAX_JSON_BYTES = 8 * 1024 * 1024;
 const EXTERNAL_REQUEST_TIMEOUT_MS = 22000;
 const OVERPASS_REQUEST_TIMEOUT_MS = 12000;
@@ -36,9 +36,10 @@ const CONTENT_TYPES = {
   ".json": "application/json; charset=utf-8", ".png": "image/png", ".svg": "image/svg+xml; charset=utf-8", ".webmanifest": "application/manifest+json; charset=utf-8"
 };
 let pool;
+let poolPromise;
 
 async function main() {
-  pool = await createPoolWithSchema();
+  await initializePool();
   const server = http.createServer((request, response) => {
     handleRequest(request, response).catch((error) => {
       if (error.statusCode) return sendJson(response, error.statusCode, { error: error.message });
@@ -50,6 +51,19 @@ async function main() {
     for (const accessUrl of getNetworkAccessUrls(PORT)) console.log(`Abra no celular conectado ao mesmo Wi-Fi: ${accessUrl}`);
     console.log(`Banco conectado: ${getDatabaseName(getDatabaseUrl())}`);
   });
+}
+async function initializePool() {
+  if (pool) return pool;
+  if (!poolPromise) {
+    poolPromise = createPoolWithSchema().then((createdPool) => {
+      pool = createdPool;
+      return pool;
+    }).catch((error) => {
+      poolPromise = undefined;
+      throw error;
+    });
+  }
+  return poolPromise;
 }
 function getNetworkAccessUrls(port) {
   if (HOST !== "0.0.0.0" && HOST !== "::") return [`http://${HOST}:${port}`];
@@ -209,4 +223,25 @@ function sendJson(response, statusCode, payload) { response.writeHead(statusCode
 function sendText(response, statusCode, text) { response.writeHead(statusCode, { "Content-Type": "text/plain; charset=utf-8" }); response.end(text); }
 function httpError(statusCode, message) { const error = new Error(message); error.statusCode = statusCode; return error; }
 process.on("uncaughtException", (error) => { if (error.statusCode) return; console.error(error); });
-main().catch((error) => { console.error("Nao foi possivel iniciar o servidor."); console.error(formatDatabaseError(error)); process.exitCode = 1; });
+
+async function vercelHandler(request, response) {
+  try {
+    if (!SESSION_SECRET) throw new Error("SESSION_SECRET nao configurado no ambiente de producao.");
+    await initializePool();
+    return await handleRequest(request, response);
+  } catch (error) {
+    if (error.statusCode) return sendJson(response, error.statusCode, { error: error.message });
+    console.error(error);
+    return sendJson(response, 500, { error: "Erro interno do servidor." });
+  }
+}
+
+module.exports = { handleRequest, initializePool, vercelHandler };
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error("Nao foi possivel iniciar o servidor.");
+    console.error(formatDatabaseError(error));
+    process.exitCode = 1;
+  });
+}

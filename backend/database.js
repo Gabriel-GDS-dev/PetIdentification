@@ -36,7 +36,7 @@ function quoteIdentifier(value) {
 }
 
 async function ensureDatabase(databaseUrl = getDatabaseUrl()) {
-  if (process.env.SKIP_DATABASE_CREATE === "true") return;
+  if (process.env.SKIP_DATABASE_CREATE === "true" || process.env.VERCEL === "1") return;
 
   const parsed = new URL(databaseUrl);
   const databaseName = getDatabaseName(databaseUrl);
