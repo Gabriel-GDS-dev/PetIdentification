@@ -225,6 +225,18 @@ function httpError(statusCode, message) { const error = new Error(message); erro
 process.on("uncaughtException", (error) => { if (error.statusCode) return; console.error(error); });
 
 async function vercelHandler(request, response) {
+  const startedAt = performance.now();
+  const originalEnd = response.end;
+  response.end = function (...args) {
+    console.log(JSON.stringify({
+      metric: "api.request_duration_ms",
+      value: Math.round(performance.now() - startedAt),
+      method: request.method || "UNKNOWN",
+      route: String(request.url || "/").split("?")[0],
+      status: response.statusCode || 200
+    }));
+    return originalEnd.apply(this, args);
+  };
   try {
     if (!SESSION_SECRET) throw new Error("SESSION_SECRET nao configurado no ambiente de producao.");
     await initializePool();
