@@ -1,10 +1,10 @@
-const CACHE_NAME = "identificcao-pet-v24";
+const CACHE_NAME = "identificcao-pet-v25";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css?v=20",
   "./styles.css",
-  "./app.js?v=22",
+  "./app.js?v=23",
   "./app.js",
   "./pet-record-actions.js?v=3",
   "./pet-record-actions.js",
