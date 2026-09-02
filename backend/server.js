@@ -27,7 +27,7 @@ const EXTRA_STATIC_FILES = new Map([
   ["/tcc_screenshots_mobile/Verso.png", path.join(PROJECT_DIR, "tcc_screenshots_mobile", "Verso.png")]
 ]);
 const STATIC_FILES = new Set([
-  "/", "/index.html", "/styles.css", "/app.js", "/pet-record-actions.js", "/service-worker.js", "/manifest.webmanifest",
+  "/", "/index.html", "/styles.css", "/app.js", "/service-worker.js", "/manifest.webmanifest",
   "/assets/pet-icon.svg", "/assets/pet-icon-dark.svg", "/assets/pet-icon-180.png", "/assets/pet-icon-192.png", "/assets/pet-icon-512.png",
   "/assets/pet-icon-maskable-512.png", "/assets/pet-icon-dark-192.png", "/assets/pet-icon-dark-512.png"
 ]);
