@@ -1,3 +1,7 @@
+import { inject } from "@vercel/analytics";
+
+inject();
+
 const STORAGE_KEY = "pet-id-wallet-state-v1";
 const APP_NAME = "Identificação Pet";
 const API_BASE = window.location.origin;
