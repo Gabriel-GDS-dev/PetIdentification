@@ -1,6 +1,8 @@
 import { inject } from "@vercel/analytics";
+import { injectSpeedInsights } from "@vercel/speed-insights";
 
 inject();
+injectSpeedInsights();
 
 const STORAGE_KEY = "pet-id-wallet-state-v1";
 const APP_NAME = "Identificação Pet";
