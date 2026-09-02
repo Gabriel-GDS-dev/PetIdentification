@@ -231,7 +231,11 @@ async function vercelHandler(request, response) {
     return await handleRequest(request, response);
   } catch (error) {
     if (error.statusCode) return sendJson(response, error.statusCode, { error: error.message });
-    console.error(error);
+    console.error("Falha ao inicializar ou executar a API:", {
+      name: error?.name,
+      code: error?.code,
+      message: error?.message
+    });
     return sendJson(response, 500, { error: "Erro interno do servidor." });
   }
 }

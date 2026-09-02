@@ -86,8 +86,19 @@ const MIGRATION_SQL = `
 async function applySchema(pool) {
   const schemaPath = path.join(__dirname, "db", "schema.sql");
   const schema = await fs.readFile(schemaPath, "utf8");
-  await pool.query(schema);
-  await pool.query(MIGRATION_SQL);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('pet-identification-schema-v1'))");
+    await client.query(schema);
+    await client.query(MIGRATION_SQL);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function createPoolWithSchema() {
