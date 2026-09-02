@@ -5,7 +5,7 @@ inject();
 injectSpeedInsights();
 
 const STORAGE_KEY = "pet-id-wallet-state-v1";
-const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v2";
+const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v3";
 const APP_NAME = "Identificação Pet";
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
@@ -28,6 +28,12 @@ const defaultState = {
   selectedPetId: "pet-luna",
   installDismissed: false,
   theme: "light",
+  accessibility: {
+    largeText: false,
+    highContrast: false,
+    reduceMotion: false,
+    buttonHints: false
+  },
   auth: {
     currentUserEmail: "",
     authView: "login",
@@ -263,6 +269,13 @@ document.addEventListener(
       event.preventDefault();
       event.stopImmediatePropagation();
       toggleTheme();
+      return;
+    }
+
+    if (name === "toggle-accessibility" && action.dataset.option) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      toggleAccessibility(action.dataset.option);
     }
   },
   true
@@ -323,6 +336,7 @@ document.addEventListener("click", (event) => {
     if (name === "install") installApp();
     if (name === "install-help") openInstallHelp();
     if (name === "toggle-theme") toggleTheme();
+    if (name === "toggle-accessibility") toggleAccessibility(action.dataset.option);
     if (name === "dismiss-install") {
       state.installDismissed = true;
       saveState();
@@ -493,7 +507,7 @@ async function clearLegacyCaches() {
   if (!("caches" in window) || localStorage.getItem(LEGACY_CLEANUP_KEY) === "done") return;
   try {
     const keys = await caches.keys();
-    await Promise.all(keys.filter((key) => /^identificcao-pet-v2[0-6]$/.test(key)).map((key) => caches.delete(key)));
+    await Promise.all(keys.filter((key) => /^identificcao-pet-v2[0-7]$/.test(key)).map((key) => caches.delete(key)));
     localStorage.setItem(LEGACY_CLEANUP_KEY, "done");
   } catch {
     // Best-effort cleanup for installed/mobile PWAs.
@@ -512,6 +526,7 @@ function loadState() {
       ...baseState,
       currentView: "home",
       selectedPetId,
+      accessibility: normalizeAccessibility(baseState.accessibility),
       travel: normalizeTravelEntry(baseState.travel || getTravelForPet(selectedPetId)),
       travelByPet: normalizedTravelByPet,
       feedback: Array.isArray(baseState.feedback) ? baseState.feedback : []
@@ -520,6 +535,7 @@ function loadState() {
     const fallback = structuredClone(defaultState);
     fallback.currentView = "home";
     fallback.selectedPetId = fallback.pets[0]?.id || "";
+    fallback.accessibility = normalizeAccessibility(fallback.accessibility);
     fallback.travel = normalizeTravelEntry(fallback.travel || blankTravel());
     fallback.travelByPet = normalizeTravelByPet(fallback.travelByPet || {});
     return fallback;
@@ -531,12 +547,24 @@ function mergeState(partial = {}) {
     ...structuredClone(defaultState),
     ...partial,
     auth: { ...defaultState.auth, ...(partial.auth || {}) },
+    accessibility: normalizeAccessibility(partial.accessibility),
     sync: { ...defaultState.sync, ...(partial.sync || {}) },
     users: Array.isArray(partial.users) ? partial.users : [],
     owner: normalizeOwner(partial.owner),
     travel: normalizeTravelEntry(partial.travel || defaultState.travel),
     travelByPet: normalizeTravelByPet(partial.travelByPet || (partial.travel ? { [partial.travel.selectedPetId || partial.selectedPetId || ""]: partial.travel } : {})),
     feedback: Array.isArray(partial.feedback) ? partial.feedback : []
+  };
+}
+
+function normalizeAccessibility(partialAccessibility = {}) {
+  return {
+    ...defaultState.accessibility,
+    ...(partialAccessibility || {}),
+    largeText: Boolean(partialAccessibility?.largeText),
+    highContrast: Boolean(partialAccessibility?.highContrast),
+    reduceMotion: Boolean(partialAccessibility?.reduceMotion),
+    buttonHints: Boolean(partialAccessibility?.buttonHints)
   };
 }
 
@@ -666,7 +694,8 @@ function applyServerSession(payload, options = {}) {
   const previousUsers = Array.isArray(state.users) ? state.users : [];
   const preferences = {
     theme: state.theme,
-    installDismissed: state.installDismissed
+    installDismissed: state.installDismissed,
+    accessibility: normalizeAccessibility(state.accessibility)
   };
   const token = options.keepToken ? state.auth?.apiToken : payload.token || state.auth?.apiToken || "";
   const remoteState = payload.state ? mergeState(payload.state) : blankStateForUser(apiUser, options.password || "");
@@ -676,6 +705,7 @@ function applyServerSession(payload, options = {}) {
     ...remoteState,
     theme: preferences.theme,
     installDismissed: preferences.installDismissed,
+    accessibility: preferences.accessibility,
     auth: {
       ...defaultState.auth,
       ...(remoteState.auth || {}),
@@ -754,7 +784,12 @@ function render() {
 }
 
 function applyTheme() {
+  const accessibility = normalizeAccessibility(state.accessibility);
   document.documentElement.dataset.theme = state.theme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.largeText = String(accessibility.largeText);
+  document.documentElement.dataset.contrast = accessibility.highContrast ? "high" : "default";
+  document.documentElement.dataset.reduceMotion = String(accessibility.reduceMotion);
+  document.documentElement.dataset.buttonHints = String(accessibility.buttonHints);
   document
     .querySelector("meta[name='theme-color']")
     ?.setAttribute("content", state.theme === "dark" ? "#0d1f20" : "#2ac9a7");
@@ -835,6 +870,7 @@ function registerForm() {
 function layout(content) {
   const active = state.currentView;
   return `
+    <a class="skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
     <main class="screen view-${active}">
       <header class="topbar">
         <button class="icon-button" type="button" data-action="drawer" aria-label="Abrir menu">☰</button>
@@ -851,10 +887,10 @@ function layout(content) {
           <button class="avatar-button" type="button" data-action="edit-owner" aria-label="Editar tutor">${initials(state.owner.name)}</button>
         </div>
       </header>
-      <section class="content">${content}</section>
+      <section id="conteudo-principal" class="content" tabindex="-1">${content}</section>
       <nav class="bottom-nav" aria-label="Navegação principal">
         ${views.map((view) => `
-          <button class="nav-item ${active === view.id ? "active" : ""}" type="button" data-action="view" data-view="${view.id}">
+          <button class="nav-item ${active === view.id ? "active" : ""}" type="button" data-action="view" data-view="${view.id}" aria-current="${active === view.id ? "page" : "false"}" aria-label="Abrir ${view.label}">
             <span class="nav-icon">${view.icon}</span>
             <span>${view.label}</span>
           </button>
@@ -882,7 +918,8 @@ function navigate(view) {
   saveState();
   closeModal();
   render();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  requestAnimationFrame(() => document.querySelector("#conteudo-principal")?.focus({ preventScroll: true }));
+  window.scrollTo({ top: 0, behavior: normalizeAccessibility(state.accessibility).reduceMotion ? "auto" : "smooth" });
 }
 
 function toggleTheme() {
@@ -891,6 +928,23 @@ function toggleTheme() {
   closeModal();
   render();
   notify(state.theme === "dark" ? "Tema escuro ativado." : "Tema claro ativado.");
+}
+
+function toggleAccessibility(option) {
+  const labels = {
+    largeText: "Texto maior",
+    highContrast: "Alto contraste",
+    reduceMotion: "Movimento reduzido",
+    buttonHints: "Ajuda nos botões"
+  };
+  if (!Object.prototype.hasOwnProperty.call(labels, option)) return;
+
+  const accessibility = normalizeAccessibility(state.accessibility);
+  accessibility[option] = !accessibility[option];
+  state.accessibility = accessibility;
+  saveState();
+  render();
+  notify(`${labels[option]} ${accessibility[option] ? "ativado" : "desativado"}.`);
 }
 
 function themeIcon() {
@@ -913,8 +967,8 @@ function homeView() {
         <h1>${APP_NAME}</h1>
         <p>Identificação, tutor, vacinas, documentos de viagem e clínicas próximas em um app instalável no celular.</p>
         <div class="button-row">
-          <button class="primary-button" type="button" data-action="new-pet">＋ Cadastrar pet</button>
-          <button class="secondary-button" type="button" data-action="view" data-view="wallet">Carteira atual</button>
+          <button class="primary-button" type="button" data-action="new-pet" data-hint="Crie uma carteira com foto, dados e cuidados do pet.">＋ Cadastrar pet</button>
+          <button class="secondary-button" type="button" data-action="view" data-view="wallet" data-hint="Abra a carteira do pet selecionado.">Carteira atual</button>
         </div>
       </div>
       <div class="hero-panel">
@@ -965,7 +1019,10 @@ function petsView() {
     <div class="page-head">
       <span class="eyebrow">Meus pets</span>
       <h1>Carteiras cadastradas</h1>
-      <p class="muted">Organize dados de identificação, saúde, contato do tutor e observações importantes.</p>
+      <div class="page-actions">
+        <button class="primary-button" type="button" data-action="new-pet" data-hint="Abre o cadastro com dados, foto e observações do pet.">＋ Adicionar pet</button>
+      </div>
+      <p class="muted">Guarde identificação, saúde e cuidados de cada pet em um lugar fácil de consultar.</p>
     </div>
     <div class="toolbar">
       <label class="searchbar">
@@ -1966,7 +2023,7 @@ function settingsView() {
     <div class="page-head">
       <span class="eyebrow">Configurações</span>
       <h1>Perfil e dados</h1>
-      <p class="muted">Gerencie tutor, instalação da PWA, exportação e restauração dos dados locais.</p>
+      <p class="muted">Ajuste o app para ficar confortável no seu celular e mantenha seus dados em ordem.</p>
     </div>
     <section class="section screen-grid">
       <div class="grid">
@@ -1985,14 +2042,15 @@ function settingsView() {
             ${detailRow("Endereço", ownerAddress())}
           </div>
         </div>
+        ${accessibilityCard()}
         <div class="card">
           <h2>Dados do aplicativo</h2>
           <p class="muted" style="margin-top: 8px;">O celular mantém uma cópia offline e sincroniza com o PostgreSQL quando o servidor está acessível.</p>
           <div class="button-row" style="margin-top: 14px;">
-            <button class="secondary-button" type="button" data-action="toggle-theme">${themeIcon()} Tema ${state.theme === "dark" ? "claro" : "escuro"}</button>
-            <button class="secondary-button" type="button" data-action="export">Exportar</button>
-            <button class="secondary-button" type="button" data-action="import">Importar</button>
-            <button class="secondary-button" type="button" data-action="sync-now">Sincronizar</button>
+            <button class="secondary-button" type="button" data-action="toggle-theme" data-hint="Alterna entre modo claro e escuro.">${themeIcon()} Tema ${state.theme === "dark" ? "claro" : "escuro"}</button>
+            <button class="secondary-button" type="button" data-action="export" data-hint="Baixa uma cópia dos dados em JSON.">Exportar</button>
+            <button class="secondary-button" type="button" data-action="import" data-hint="Restaura um backup salvo anteriormente.">Importar</button>
+            <button class="secondary-button" type="button" data-action="sync-now" data-hint="Envia os dados deste aparelho para o PostgreSQL.">Sincronizar</button>
             <button class="secondary-button" type="button" data-action="logout">Sair</button>
             <button class="danger-button" type="button" data-action="reset-demo">Restaurar demo</button>
           </div>
@@ -2012,6 +2070,42 @@ function settingsView() {
         </div>
       </aside>
     </section>
+  `;
+}
+
+function accessibilityCard() {
+  const accessibility = normalizeAccessibility(state.accessibility);
+  return `
+    <div class="card accessibility-card">
+      <div class="section-title">
+        <div>
+          <h2>Acessibilidade</h2>
+          <p class="muted small">Preferências para leitura, toque e conforto visual.</p>
+        </div>
+      </div>
+      <div class="a11y-summary" style="margin-top: 12px;">
+        <strong>Modo de uso mais confortável</strong>
+        <p class="muted small">Essas opções ficam salvas neste aparelho e acompanham sua conta ao sincronizar.</p>
+      </div>
+      <div class="toggle-list" style="margin-top: 12px;">
+        ${accessibilityToggle("largeText", "Texto maior", "Aumenta letras e áreas de toque nas telas principais.", accessibility.largeText)}
+        ${accessibilityToggle("highContrast", "Alto contraste", "Reforça bordas e cores para facilitar a leitura.", accessibility.highContrast)}
+        ${accessibilityToggle("reduceMotion", "Reduzir movimento", "Diminui animações e rolagens suaves.", accessibility.reduceMotion)}
+        ${accessibilityToggle("buttonHints", "Ajuda nos botões", "Mostra uma frase curta em ações importantes.", accessibility.buttonHints)}
+      </div>
+    </div>
+  `;
+}
+
+function accessibilityToggle(option, title, description, enabled) {
+  return `
+    <button class="toggle-option" type="button" role="switch" aria-checked="${enabled ? "true" : "false"}" data-action="toggle-accessibility" data-option="${option}">
+      <span>
+        <strong>${title}</strong>
+        <span class="muted small">${description}</span>
+      </span>
+      <span class="toggle-switch ${enabled ? "on" : ""}" aria-hidden="true">${enabled ? "Sim" : "Não"}</span>
+    </button>
   `;
 }
 
@@ -2620,7 +2714,7 @@ function openDrawer() {
           <span>↩</span> Sair da conta
         </button>
         ${drawerViews.map((view) => `
-          <button class="${state.currentView === view.id ? "active" : ""}" type="button" data-action="view" data-view="${view.id}">
+          <button class="${state.currentView === view.id ? "active" : ""}" type="button" data-action="view" data-view="${view.id}" aria-current="${state.currentView === view.id ? "page" : "false"}">
             <span>${view.icon}</span> ${view.label}
           </button>
         `).join("")}
@@ -2954,12 +3048,14 @@ async function register(data) {
 
   const previousTheme = state.theme;
   const previousInstallDismissed = state.installDismissed;
+  const previousAccessibility = normalizeAccessibility(state.accessibility);
   const previousUsers = Array.isArray(state.users) ? state.users : [];
 
   state = {
     ...structuredClone(defaultState),
     theme: previousTheme,
     installDismissed: previousInstallDismissed,
+    accessibility: previousAccessibility,
     users: [...previousUsers, user],
     auth: {
       currentUserEmail: user.email,
@@ -3244,11 +3340,13 @@ function resetDemo() {
   const previousAuth = { ...state.auth };
   const previousUsers = Array.isArray(state.users) ? state.users : [];
   const previousTheme = state.theme;
+  const previousAccessibility = normalizeAccessibility(state.accessibility);
   state = {
     ...structuredClone(defaultState),
     auth: previousAuth,
     users: previousUsers,
-    theme: previousTheme
+    theme: previousTheme,
+    accessibility: previousAccessibility
   };
   saveState();
   notify("Demonstração restaurada.");

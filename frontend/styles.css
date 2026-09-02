@@ -428,6 +428,16 @@ html[data-button-hints="true"] .link-button[data-hint]::after {
   margin-bottom: 18px;
 }
 
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.content:focus {
+  outline: none;
+}
+
 .eyebrow {
   color: var(--primary-strong);
   font-size: 0.78rem;
@@ -2431,6 +2441,10 @@ html[data-theme="dark"] .toast {
 .toggle-option > span:first-child {
   display: grid;
   gap: 2px;
+}
+
+.toggle-option strong {
+  color: var(--ink);
 }
 
 .toggle-switch {
