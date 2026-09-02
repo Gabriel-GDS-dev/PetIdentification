@@ -5,7 +5,14 @@ const { Client, Pool } = require("pg");
 const DEFAULT_DATABASE_URL = "postgres://postgres@127.0.0.1:55432/pet_identification";
 
 function getDatabaseUrl() {
-  return process.env.DATABASE_URL || DEFAULT_DATABASE_URL;
+  const databaseUrl = process.env.DATABASE_URL
+    || process.env.POSTGRES_PRISMA_URL
+    || process.env.POSTGRES_URL
+    || (process.env.VERCEL ? "" : DEFAULT_DATABASE_URL);
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL nao configurado no ambiente da Vercel.");
+  }
+  return databaseUrl;
 }
 
 function formatDatabaseError(error) {
@@ -86,7 +93,12 @@ async function applySchema(pool) {
 async function createPoolWithSchema() {
   const databaseUrl = getDatabaseUrl();
   await ensureDatabase(databaseUrl);
-  const pool = new Pool({ connectionString: databaseUrl });
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    max: process.env.VERCEL ? 3 : 10,
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: process.env.VERCEL ? 10000 : 30000
+  });
   await applySchema(pool);
   return pool;
 }

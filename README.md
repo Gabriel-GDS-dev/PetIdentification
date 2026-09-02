@@ -184,6 +184,24 @@ Nunca adicione `.env`, senhas ou `DATABASE_URL` real ao repositório. Use `.env.
 
 `SESSION_SECRET` deve ser um segredo aleatório longo e igual entre os deploys. `DATABASE_URL` deve apontar para um PostgreSQL acessível pela internet e com SSL quando o provedor exigir. O schema é aplicado automaticamente quando a Function inicializa.
 
+### Prisma Postgres
+
+Para o Prisma Postgres, use a URL **pooled** fornecida pelo painel (normalmente com `pooled.db.prisma.io` e `sslmode=require`) como valor de `DATABASE_URL`. Cole a URL diretamente no campo da Vercel, sem aspas e sem colocá-la em arquivos versionados. Por segurança, se uma URL real foi compartilhada fora do painel da Vercel, gere uma nova senha/token no Prisma antes de continuar.
+
+Depois de salvar as variáveis, faça **Redeploy**. A aplicação cria as tabelas do arquivo `backend/db/schema.sql` na primeira inicialização da Function; não é necessário rodar `db:start` na Vercel.
+
+### Erros de login e manifest após publicar
+
+Se o navegador mostrar uma URL `vercel.com/sso-api` no carregamento de `manifest.webmanifest`, desative a proteção do deployment em **Settings > Deployment Protection** (ou publique um domínio de produção sem autenticação). Um app PWA público não pode exigir login da conta Vercel para acessar o manifest e as Functions.
+
+Se `/api/login` ou `/api/register` retornar `500`, confira em **Settings > Environment Variables**:
+
+- `DATABASE_URL` contém a URL pooled do Prisma Postgres, com `sslmode=require`.
+- Caso a integração tenha criado `POSTGRES_PRISMA_URL` ou `POSTGRES_URL` em vez de `DATABASE_URL`, o backend também aceita esses nomes.
+- `SESSION_SECRET` está preenchido nos mesmos ambientes do deployment.
+
+Após alterar qualquer variável, faça **Redeploy**. Consulte **Deployments > Functions > Logs** para confirmar a causa. Não use a URL do Prisma em código, GitHub, `.env` versionado ou mensagens públicas.
+
 ### 3. Validar após o deploy
 
 Abra estas URLs usando o domínio da Vercel:
