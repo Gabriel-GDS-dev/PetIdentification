@@ -1,10 +1,10 @@
-const CACHE_NAME = "identificcao-pet-v28";
+const CACHE_NAME = "registro-digital-animal-v29";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=23",
+  "./styles.css?v=24",
   "./styles.css",
-  "./app.js?v=26",
+  "./app.js?v=27",
   "./app.js",
   "./manifest.webmanifest",
   "./assets/pet-icon.svg",
@@ -15,6 +15,8 @@ const APP_SHELL = [
   "./assets/pet-icon-maskable-512.png",
   "./assets/pet-icon-dark-192.png",
   "./assets/pet-icon-dark-512.png",
+  "./assets/fluxograma-registro-digital-animal.svg",
+  "./assets/fluxograma-registro-digital-animal.png",
   "./tcc_screenshots_mobile/Frente.png",
   "./tcc_screenshots_mobile/Verso.png"
 ];

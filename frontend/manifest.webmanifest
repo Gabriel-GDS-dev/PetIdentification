@@ -1,7 +1,7 @@
 {
-  "name": "Identificação Pet - Carteira Digital",
-  "short_name": "Identificação Pet",
-  "description": "Carteira digital completa para pets, tutores, vacinas, viagens e veterinárias próximas.",
+  "name": "Registro Digital Animal - Carteira Digital",
+  "short_name": "Registro Animal",
+  "description": "Registro digital completo para animais, tutores, vacinas, viagens e veterinárias próximas.",
   "id": "./",
   "start_url": "./index.html",
   "scope": "./",

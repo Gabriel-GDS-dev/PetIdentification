@@ -16,7 +16,7 @@ if ($owners.Count) {
 
 Set-PetSessionSecret -ProjectDirectory $projectDirectory
 
-Write-Host "Iniciando Pet Identification em $hostName`:$port..."
+Write-Host "Iniciando Registro Digital Animal em $hostName`:$port..."
 Write-Host "Pressione Ctrl+C para encerrar o servidor."
 Write-Host ""
 

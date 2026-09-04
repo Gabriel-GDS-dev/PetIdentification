@@ -1,4 +1,4 @@
-# Identificação Pet - Carteira Digital para Pets
+# Registro Digital Animal - Carteira Digital para Pets
 
 PWA para carteira digital de pets com frontend separado, backend Node e PostgreSQL.
 

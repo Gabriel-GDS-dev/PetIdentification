@@ -1,6 +1,6 @@
 @echo off
 cd /d "%~dp0"
-title Identificacao Pet - Celular
+title Registro Digital Animal - Celular
 echo MODO CELULAR POR WI-FI
 echo.
 echo Antes de continuar:

@@ -14,7 +14,7 @@ const OVERPASS_REQUEST_TIMEOUT_MS = 12000;
 const OVERPASS_API_URL = process.env.OVERPASS_API_URL || "https://overpass-api.de/api/interpreter";
 const OVERPASS_API_URLS = (process.env.OVERPASS_API_URLS ? process.env.OVERPASS_API_URLS.split(/[,\s]+/) : [OVERPASS_API_URL, "https://overpass.kumi.systems/api/interpreter", "https://lz4.overpass-api.de/api/interpreter"]).filter(Boolean);
 const GEOCODING_API_URL = process.env.GEOCODING_API_URL || "https://nominatim.openstreetmap.org/search";
-const EXTERNAL_USER_AGENT = "PetIdentification/1.0 (local pet wallet application)";
+const EXTERNAL_USER_AGENT = "RegistroDigitalAnimal/1.0 (local animal wallet application)";
 const DEFAULT_CLINIC_RADIUS = 12000;
 const CLINIC_SEARCH_RADII = [DEFAULT_CLINIC_RADIUS, 25000, 50000];
 const MAX_CLINIC_RADIUS = CLINIC_SEARCH_RADII[CLINIC_SEARCH_RADII.length - 1];
@@ -29,7 +29,8 @@ const EXTRA_STATIC_FILES = new Map([
 const STATIC_FILES = new Set([
   "/", "/index.html", "/styles.css", "/app.js", "/service-worker.js", "/manifest.webmanifest",
   "/assets/pet-icon.svg", "/assets/pet-icon-dark.svg", "/assets/pet-icon-180.png", "/assets/pet-icon-192.png", "/assets/pet-icon-512.png",
-  "/assets/pet-icon-maskable-512.png", "/assets/pet-icon-dark-192.png", "/assets/pet-icon-dark-512.png"
+  "/assets/pet-icon-maskable-512.png", "/assets/pet-icon-dark-192.png", "/assets/pet-icon-dark-512.png",
+  "/assets/fluxograma-registro-digital-animal.svg", "/assets/fluxograma-registro-digital-animal.png"
 ]);
 const CONTENT_TYPES = {
   ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -47,7 +48,7 @@ async function main() {
     });
   });
   server.listen(PORT, HOST, () => {
-    console.log(`Pet Identification rodando no computador: http://127.0.0.1:${PORT}`);
+    console.log(`Registro Digital Animal rodando no computador: http://127.0.0.1:${PORT}`);
     for (const accessUrl of getNetworkAccessUrls(PORT)) console.log(`Abra no celular conectado ao mesmo Wi-Fi: ${accessUrl}`);
     console.log(`Banco conectado: ${getDatabaseName(getDatabaseUrl())}`);
   });

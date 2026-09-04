@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 
 $port = Get-PetServerPort
 if (Stop-PetServerOnPort -Port $port) {
-  Write-Host "Porta $port liberada para o Pet Identification."
+  Write-Host "Porta $port liberada para o Registro Digital Animal."
   exit 0
 }
 

@@ -43,7 +43,7 @@ function Test-IsPetServer {
 
   try {
     $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$Port/" -TimeoutSec 3
-    return ($response.Content -match "Identifica" -and $response.Content -match "Carteira Digital")
+    return ($response.Content -match "Registro Digital Animal" -and $response.Content -match "Carteira Digital")
   } catch {
     return $false
   }

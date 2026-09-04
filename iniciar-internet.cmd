@@ -1,6 +1,6 @@
 @echo off
 cd /d "%~dp0"
-title Identificacao Pet - Internet
+title Registro Digital Animal - Internet
 echo MODO INTERNET PUBLICO
 echo.
 echo Este modo deixa o app acessivel fora do seu Wi-Fi usando HTTPS.

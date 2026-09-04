@@ -1,12 +1,19 @@
 import { inject } from "@vercel/analytics";
 import { injectSpeedInsights } from "@vercel/speed-insights";
 
-inject();
-injectSpeedInsights();
+const IS_LOCAL_HOST = ["localhost", "127.0.0.1"].includes(window.location.hostname)
+  || window.location.hostname.startsWith("192.168.")
+  || window.location.hostname.startsWith("10.")
+  || /^172\.(1[6-9]|2\d|3[0-1])\./.test(window.location.hostname);
+
+if (!IS_LOCAL_HOST) {
+  inject();
+  injectSpeedInsights();
+}
 
 const STORAGE_KEY = "pet-id-wallet-state-v1";
 const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v3";
-const APP_NAME = "Identificação Pet";
+const APP_NAME = "Registro Digital Animal";
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
 const DOCUMENT_FILE_MAX_BYTES = 1.5 * 1024 * 1024;
@@ -459,16 +466,8 @@ function init() {
       .register("./service-worker.js")
       .then((registration) => {
         registration.update?.();
-        if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
       })
       .catch(() => {});
-
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (refreshing) return;
-      refreshing = true;
-      window.location.reload();
-    });
   }
   render();
   syncWithServer("startup", { silent: true });
@@ -524,7 +523,7 @@ function loadState() {
     const normalizedTravelByPet = normalizeTravelByPet(baseState.travelByPet || {});
     return {
       ...baseState,
-      currentView: "home",
+      currentView: validView(baseState.currentView) ? baseState.currentView : "home",
       selectedPetId,
       accessibility: normalizeAccessibility(baseState.accessibility),
       travel: normalizeTravelEntry(baseState.travel || getTravelForPet(selectedPetId)),
@@ -555,6 +554,10 @@ function mergeState(partial = {}) {
     travelByPet: normalizeTravelByPet(partial.travelByPet || (partial.travel ? { [partial.travel.selectedPetId || partial.selectedPetId || ""]: partial.travel } : {})),
     feedback: Array.isArray(partial.feedback) ? partial.feedback : []
   };
+}
+
+function validView(view) {
+  return ["home", "pets", "wallet", "vaccines", "travel", "clinics", "feedback", "settings"].includes(view);
 }
 
 function normalizeAccessibility(partialAccessibility = {}) {
@@ -825,9 +828,9 @@ function authView() {
           </div>
         </div>
         <div class="auth-copy">
-          <span class="eyebrow">Identificação segura</span>
+          <span class="eyebrow">Registro seguro</span>
           <h1>${isRegister ? "Crie sua carteira pet" : "Bem-vindo de volta"}</h1>
-          <p>Tenha dados do pet, tutor, vacinas, viagem e veterinárias próximas em um app instalável no celular.</p>
+          <p>Tenha dados do animal, tutor, vacinas, viagem e veterinárias próximas em um app instalável no celular.</p>
         </div>
       </section>
 
@@ -965,7 +968,7 @@ function homeView() {
       <div class="hero-copy">
         <span class="eyebrow">Carteira digital completa</span>
         <h1>${APP_NAME}</h1>
-        <p>Identificação, tutor, vacinas, documentos de viagem e clínicas próximas em um app instalável no celular.</p>
+        <p>Registro, tutor, vacinas, documentos de viagem e clínicas próximas em um app instalável no celular.</p>
         <div class="button-row">
           <button class="primary-button" type="button" data-action="new-pet" data-hint="Crie uma carteira com foto, dados e cuidados do pet.">＋ Cadastrar pet</button>
           <button class="secondary-button" type="button" data-action="view" data-view="wallet" data-hint="Abra a carteira do pet selecionado.">Carteira atual</button>
@@ -995,7 +998,7 @@ function homeView() {
         <div class="section-title">
           <div>
             <h2>Carteira em destaque</h2>
-            <p class="muted small">${selectedPet ? "Dados prontos para identificação rápida." : "Cadastre um pet para gerar a carteira."}</p>
+            <p class="muted small">${selectedPet ? "Dados prontos para registro rápido." : "Cadastre um pet para gerar a carteira."}</p>
           </div>
           <button class="ghost-button" type="button" data-action="view" data-view="pets">Ver todos</button>
         </div>
@@ -1022,7 +1025,7 @@ function petsView() {
       <div class="page-actions">
         <button class="primary-button" type="button" data-action="new-pet" data-hint="Abre o cadastro com dados, foto e observações do pet.">＋ Adicionar pet</button>
       </div>
-      <p class="muted">Guarde identificação, saúde e cuidados de cada pet em um lugar fácil de consultar.</p>
+      <p class="muted">Guarde registro, saúde e cuidados de cada pet em um lugar fácil de consultar.</p>
     </div>
     <div class="toolbar">
       <label class="searchbar">
@@ -1067,7 +1070,7 @@ function walletView() {
     <div class="page-head">
       <span class="eyebrow">Carteira do pet</span>
       <h1>${escapeHTML(pet.name)}</h1>
-      <p class="muted">Identificação digital com dados do pet, tutor, saúde e documentos.</p>
+      <p class="muted">Registro digital com dados do pet, tutor, saúde e documentos.</p>
     </div>
 
     <div class="identity">
@@ -1159,9 +1162,9 @@ function animalWalletDocumentView(pet, petVaccines, petDocs) {
 
   return `
     <div class="page-head">
-      <span class="eyebrow">Identificação oficial do pet</span>
+      <span class="eyebrow">Registro oficial do animal</span>
       <h1>Carteira do ${escapeHTML(pet.name)}</h1>
-      <p class="muted">Deslize para consultar a frente e o verso da identificação.</p>
+      <p class="muted">Deslize para consultar a frente e o verso do registro.</p>
     </div>
 
     <section class="wallet-document" aria-label="Carteira de identidade animal">
@@ -1181,7 +1184,7 @@ function animalWalletDocumentView(pet, petVaccines, petDocs) {
               <span class="pet-id-seal"><img src="./assets/pet-icon.svg" alt="" /></span>
               <span class="pet-id-heading">
                 <small>República Federativa do Brasil</small>
-                <strong>Carteira Nacional de Identificação Pet</strong>
+                <strong>Registro Digital Animal</strong>
                 <em>CNIP · Documento digital</em>
               </span>
               <span class="pet-id-country">BR</span>
@@ -1231,7 +1234,7 @@ function animalWalletDocumentView(pet, petVaccines, petDocs) {
             <header class="pet-id-header pet-id-header-back">
               <span class="pet-id-seal"><img src="./assets/pet-icon.svg" alt="" /></span>
               <span class="pet-id-heading">
-                <small>Identificação Pet</small>
+                <small>Registro Digital Animal</small>
                 <strong>Dados do tutor e segurança</strong>
                 <em>Apresente esta carteira em caso de emergência</em>
               </span>
@@ -1477,7 +1480,7 @@ function walletDocumentView(pet, petVaccines, petDocs) {
     <div class="page-head">
       <span class="eyebrow">Documento digital</span>
       <h1>Carteira do ${escapeHTML(pet.name)}</h1>
-      <p class="muted">Layout inspirado em documentos digitais, com identificação do pet, tutor, saúde e QR visual.</p>
+      <p class="muted">Layout inspirado em documentos digitais, com registro do pet, tutor, saúde e QR visual.</p>
     </div>
 
     <section class="digital-wallet" aria-label="Documento digital do pet">
@@ -1487,7 +1490,7 @@ function walletDocumentView(pet, petVaccines, petDocs) {
           <div>
             <span class="doc-country">BRASIL</span>
             <strong>${APP_NAME}</strong>
-            <span>Documento Digital do Pet</span>
+            <span>Registro Digital Animal</span>
           </div>
           <img class="doc-logo" src="${logoSrc()}" alt="${APP_NAME}" />
         </div>
@@ -3358,7 +3361,7 @@ function exportData() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `identificcao-pet-backup-${todayISO}.json`;
+  link.download = `registro-digital-animal-backup-${todayISO}.json`;
   document.body.append(link);
   link.click();
   link.remove();

@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1900" viewBox="0 0 1400 1900" role="img" aria-labelledby="title desc">
+  <title id="title">Fluxograma do Registro Digital Animal</title>
+  <desc id="desc">Fluxo principal da aplicacao Registro Digital Animal, do acesso inicial ao cadastro, carteira digital, documentos, vacinas, viagem, clinicas proximas, sincronizacao e exportacao.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L12,7 L2,12 Z" fill="#1f3d3a"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#1f3d3a" flood-opacity=".12"/>
+    </filter>
+    <style>
+      .page{fill:#ffffff}
+      .title{font:700 42px Arial, sans-serif;fill:#163330}
+      .subtitle{font:400 24px Arial, sans-serif;fill:#536765}
+      .box{fill:#f7fbfa;stroke:#1f3d3a;stroke-width:3;filter:url(#shadow)}
+      .box-alt{fill:#eef9f6;stroke:#17716b;stroke-width:3;filter:url(#shadow)}
+      .decision{fill:#fff8e8;stroke:#8b6f2c;stroke-width:3;filter:url(#shadow)}
+      .terminal{fill:#163330;stroke:#163330;stroke-width:3;filter:url(#shadow)}
+      .terminal-text{font:700 25px Arial, sans-serif;fill:#ffffff}
+      .label{font:700 25px Arial, sans-serif;fill:#163330}
+      .small{font:400 21px Arial, sans-serif;fill:#415452}
+      .arrow{fill:none;stroke:#1f3d3a;stroke-width:4;marker-end:url(#arrow)}
+      .side-arrow{fill:none;stroke:#647977;stroke-width:3;marker-end:url(#arrow)}
+      .note{font:700 20px Arial, sans-serif;fill:#6d5a23}
+      .caption{font:400 22px Arial, sans-serif;fill:#243b38}
+    </style>
+  </defs>
+
+  <rect class="page" width="1400" height="1900"/>
+  <text class="title" x="700" y="92" text-anchor="middle">Fluxograma - Registro Digital Animal</text>
+  <text class="subtitle" x="700" y="132" text-anchor="middle">Fluxo principal da carteira digital para registro, saude e documentos de animais</text>
+
+  <rect class="terminal" x="475" y="185" width="450" height="86" rx="43"/>
+  <text class="terminal-text" x="700" y="238" text-anchor="middle">Inicio</text>
+
+  <path class="arrow" d="M700 271 V330"/>
+  <rect class="box" x="440" y="330" width="520" height="110" rx="16"/>
+  <text class="label" x="700" y="374" text-anchor="middle">Usuario acessa o app/site</text>
+  <text class="small" x="700" y="408" text-anchor="middle">PWA no celular ou navegador</text>
+
+  <path class="arrow" d="M700 440 V505"/>
+  <path class="decision" d="M700 505 L960 625 L700 745 L440 625 Z"/>
+  <text class="label" x="700" y="610" text-anchor="middle">Usuario possui</text>
+  <text class="label" x="700" y="642" text-anchor="middle">cadastro?</text>
+
+  <path class="side-arrow" d="M440 625 H235 V820 H260"/>
+  <text class="note" x="315" y="603" text-anchor="middle">Nao</text>
+  <rect class="box-alt" x="260" y="770" width="390" height="105" rx="16"/>
+  <text class="label" x="455" y="813" text-anchor="middle">Criar conta</text>
+  <text class="small" x="455" y="846" text-anchor="middle">Nome, e-mail, telefone e senha</text>
+
+  <path class="side-arrow" d="M960 625 H1165 V820 H1140"/>
+  <text class="note" x="1082" y="603" text-anchor="middle">Sim</text>
+  <rect class="box-alt" x="750" y="770" width="390" height="105" rx="16"/>
+  <text class="label" x="945" y="813" text-anchor="middle">Entrar na conta</text>
+  <text class="small" x="945" y="846" text-anchor="middle">Validacao local ou API</text>
+
+  <path class="arrow" d="M455 875 V915 H700 V935"/>
+  <path class="arrow" d="M945 875 V915 H700 V935"/>
+  <rect class="box" x="440" y="935" width="520" height="112" rx="16"/>
+  <text class="label" x="700" y="978" text-anchor="middle">Tela inicial</text>
+  <text class="small" x="700" y="1012" text-anchor="middle">Resumo de pets, vacinas e viagem</text>
+
+  <path class="arrow" d="M700 1047 V1112"/>
+  <rect class="box-alt" x="440" y="1112" width="520" height="126" rx="16"/>
+  <text class="label" x="700" y="1155" text-anchor="middle">Cadastrar ou selecionar animal</text>
+  <text class="small" x="700" y="1189" text-anchor="middle">Dados do pet, tutor, foto e assinatura</text>
+
+  <path class="arrow" d="M700 1238 V1305"/>
+  <path class="decision" d="M700 1305 L960 1425 L700 1545 L440 1425 Z"/>
+  <text class="label" x="700" y="1409" text-anchor="middle">Qual modulo</text>
+  <text class="label" x="700" y="1441" text-anchor="middle">consultar?</text>
+
+  <path class="side-arrow" d="M440 1425 H170 V1600 H205"/>
+  <rect class="box" x="205" y="1545" width="330" height="105" rx="16"/>
+  <text class="label" x="370" y="1587" text-anchor="middle">Vacinas</text>
+  <text class="small" x="370" y="1620" text-anchor="middle">Doses, prazos e alertas</text>
+
+  <path class="arrow" d="M700 1545 V1600"/>
+  <rect class="box" x="535" y="1600" width="330" height="105" rx="16"/>
+  <text class="label" x="700" y="1642" text-anchor="middle">Carteira digital</text>
+  <text class="small" x="700" y="1675" text-anchor="middle">Frente, verso e PDF</text>
+
+  <path class="side-arrow" d="M960 1425 H1230 V1600 H1195"/>
+  <rect class="box" x="865" y="1545" width="330" height="105" rx="16"/>
+  <text class="label" x="1030" y="1587" text-anchor="middle">Documentos e viagem</text>
+  <text class="small" x="1030" y="1620" text-anchor="middle">Anexos, checklist e destino</text>
+
+  <path class="side-arrow" d="M700 1047 H1145 V1138"/>
+  <rect class="box" x="965" y="1138" width="360" height="112" rx="16"/>
+  <text class="label" x="1145" y="1181" text-anchor="middle">Clinicas proximas</text>
+  <text class="small" x="1145" y="1215" text-anchor="middle">GPS, CEP e OpenStreetMap</text>
+  <path class="side-arrow" d="M965 1194 H870 V1260"/>
+
+  <path class="arrow" d="M370 1650 V1770 H700"/>
+  <path class="arrow" d="M700 1705 V1770"/>
+  <path class="arrow" d="M1030 1650 V1770 H700"/>
+  <rect class="terminal" x="475" y="1770" width="450" height="70" rx="35"/>
+  <text class="terminal-text" x="700" y="1815" text-anchor="middle">Dados salvos e sincronizados</text>
+
+  <text class="caption" x="700" y="1870" text-anchor="middle">Figura - Fluxograma da funcionalidade principal do sistema. Fonte: Do autor.</text>
+</svg>
