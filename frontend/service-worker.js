@@ -1,10 +1,10 @@
-const CACHE_NAME = "registro-digital-animal-v30";
+const CACHE_NAME = "registro-digital-animal-v31";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css?v=24",
   "./styles.css",
-  "./app.js?v=28",
+  "./app.js?v=29",
   "./app.js",
   "./manifest.webmanifest",
   "./assets/pet-icon.svg",

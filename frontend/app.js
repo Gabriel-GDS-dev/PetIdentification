@@ -243,7 +243,6 @@ window.addEventListener("appinstalled", () => {
 
 window.addEventListener("online", () => syncWithServer("online"));
 window.addEventListener("offline", () => markSyncOffline("Sem conexão com a internet."));
-window.addEventListener("pagehide", () => saveState({ sync: false }));
 
 document.addEventListener(
   "click",
@@ -524,7 +523,7 @@ function loadState() {
     const normalizedTravelByPet = normalizeTravelByPet(baseState.travelByPet || {});
     return {
       ...baseState,
-      currentView: validView(baseState.currentView) ? baseState.currentView : "home",
+      currentView: "home",
       selectedPetId,
       accessibility: normalizeAccessibility(baseState.accessibility),
       travel: normalizeTravelEntry(baseState.travel || getTravelForPet(selectedPetId)),
@@ -614,7 +613,6 @@ async function syncWithServer(reason = "auto", options = {}) {
   clearTimeout(syncTimer);
 
   const previousSync = { ...defaultState.sync, ...(state.sync || {}) };
-  const preservedCurrentView = state.currentView;
   state.sync = { ...previousSync, status: "syncing", lastError: "", apiOnline: true };
   saveState({ sync: false });
   if (!options.silent && reason === "manual") render();
@@ -630,9 +628,7 @@ async function syncWithServer(reason = "auto", options = {}) {
     });
 
     applyServerSession(payload, { keepToken: true });
-    if (reason === "startup" && validView(preservedCurrentView)) {
-      state.currentView = preservedCurrentView;
-    }
+    if (reason === "startup") state.currentView = "home";
     state.sync = {
       status: "synced",
       lastSyncedAt: payload.syncedAt || new Date().toISOString(),
