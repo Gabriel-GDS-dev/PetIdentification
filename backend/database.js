@@ -5,15 +5,20 @@ const { Client, Pool } = require("pg");
 const DEFAULT_DATABASE_URL = "postgres://postgres@127.0.0.1:55432/pet_identification";
 
 function getDatabaseUrl() {
-  const databaseUrl = process.env.DATABASE_URL
-    || process.env.POSTGRES_PRISMA_URL
-    || process.env.POSTGRES_URL
+  const candidates = [
+    process.env.DATABASE_URL,
+    process.env.POSTGRES_PRISMA_URL,
+    process.env.POSTGRES_URL,
+    process.env.POSTGRES_URL_NON_POOLING,
+    process.env.POSTGRES_URL_NO_SSL
+  ].filter(Boolean);
+  const databaseUrl = candidates.find((url) => /^postgres(ql)?:\/\//i.test(url))
     || (process.env.VERCEL ? "" : DEFAULT_DATABASE_URL);
   if (!databaseUrl) {
+    if (candidates.some((url) => /^prisma\+postgres:\/\//i.test(url))) {
+      throw new Error("A Vercel recebeu apenas URL prisma+postgres://. Adicione uma URL SQL PostgreSQL em DATABASE_URL, POSTGRES_URL ou POSTGRES_URL_NON_POOLING.");
+    }
     throw new Error("DATABASE_URL nao configurado no ambiente da Vercel.");
-  }
-  if (/^prisma\+postgres:\/\//i.test(databaseUrl)) {
-    throw new Error("Use uma URL PostgreSQL SQL comum em DATABASE_URL (postgres:// ou postgresql://), nao a URL prisma+postgres://.");
   }
   return databaseUrl;
 }
