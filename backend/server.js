@@ -249,8 +249,16 @@ async function vercelHandler(request, response) {
       code: error?.code,
       message: error?.message
     });
-    return sendJson(response, 500, { error: "Erro interno do servidor." });
+    return sendJson(response, 500, { error: publicStartupErrorMessage(error) });
   }
+}
+
+function publicStartupErrorMessage(error) {
+  const message = String(error?.message || "");
+  if (message.includes("SESSION_SECRET")) return message;
+  if (message.includes("DATABASE_URL") || message.includes("prisma+postgres://")) return message;
+  if (["28P01", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "ECONNRESET"].includes(error?.code)) return formatDatabaseError(error);
+  return "Erro interno do servidor.";
 }
 
 module.exports = { handleRequest, initializePool, vercelHandler };

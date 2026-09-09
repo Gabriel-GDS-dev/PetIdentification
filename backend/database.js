@@ -12,6 +12,9 @@ function getDatabaseUrl() {
   if (!databaseUrl) {
     throw new Error("DATABASE_URL nao configurado no ambiente da Vercel.");
   }
+  if (/^prisma\+postgres:\/\//i.test(databaseUrl)) {
+    throw new Error("Use uma URL PostgreSQL SQL comum em DATABASE_URL (postgres:// ou postgresql://), nao a URL prisma+postgres://.");
+  }
   return databaseUrl;
 }
 

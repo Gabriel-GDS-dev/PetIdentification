@@ -14,7 +14,7 @@ if (!IS_LOCAL_HOST) {
 const STORAGE_KEY = "pet-id-wallet-state-v1";
 const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v4";
 const APP_NAME = "Registro Digital Animal";
-const APP_VERSION = "32";
+const APP_VERSION = "33";
 const APP_CACHE_NAME = `registro-digital-animal-v${APP_VERSION}`;
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
@@ -415,6 +415,7 @@ document.addEventListener("click", (event) => {
     if (name === "delete-document") deleteDocument(id);
     if (name === "install") installApp();
     if (name === "install-help") openInstallHelp();
+    if (name === "clear-app-cache") clearAppCache();
     if (name === "toggle-theme") toggleTheme();
     if (name === "toggle-accessibility") toggleAccessibility(action.dataset.option);
     if (name === "dismiss-install") {
@@ -601,11 +602,42 @@ async function clearLegacyCaches() {
   try {
     if (!("caches" in window) || localStorage.getItem(LEGACY_CLEANUP_KEY) === "done") return;
     const keys = await caches.keys();
-    const oldCachePattern = /^(identificcao-pet-v2[0-9]|registro-digital-animal-v\d+)$/;
-    await Promise.all(keys.filter((key) => oldCachePattern.test(key) && key !== APP_CACHE_NAME).map((key) => caches.delete(key)));
+    await Promise.all(keys.filter((key) => isPetCacheName(key) && key !== APP_CACHE_NAME).map((key) => caches.delete(key)));
     localStorage.setItem(LEGACY_CLEANUP_KEY, "done");
   } catch {
     // Best-effort cleanup for installed/mobile PWAs.
+  }
+}
+
+function isPetCacheName(key) {
+  return /^(identificcao-pet-v2[0-9]|registro-digital-animal-v\d+)$/.test(String(key || ""));
+}
+
+async function clearAppCache() {
+  try {
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter(isPetCacheName).map((key) => caches.delete(key)));
+    }
+
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.update?.().catch(() => {})));
+      registrations.forEach((registration) => registration.waiting?.postMessage({ type: "SKIP_WAITING" }));
+    }
+
+    try {
+      localStorage.removeItem(LEGACY_CLEANUP_KEY);
+      sessionStorage.removeItem("pet-id-sw-refreshed");
+    } catch {
+      // Local/session storage can be blocked; cache cleanup above is still useful.
+    }
+
+    notify("Cache limpo. Recarregando o app...");
+    setTimeout(() => window.location.reload(), 600);
+  } catch (error) {
+    console.warn("Nao foi possivel limpar o cache do app.", error);
+    notify("Nao foi possivel limpar o cache automaticamente.");
   }
 }
 
@@ -684,13 +716,6 @@ function saveState(options = {}) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (error) {
     console.warn("Nao foi possivel salvar no armazenamento local.", error);
-    state.sync = {
-      ...defaultState.sync,
-      ...(state.sync || {}),
-      status: "error",
-      lastError: "Armazenamento local cheio ou bloqueado. A navegacao continua, mas limpe o cache se o problema voltar.",
-      apiOnline: Boolean(state.sync?.apiOnline)
-    };
     if (options.notify !== false && !localStorageWarningShown) {
       localStorageWarningShown = true;
       notify("Armazenamento local cheio. Limpe o cache do app se a navegacao travar novamente.");
@@ -729,14 +754,13 @@ async function syncWithServer(reason = "auto", options = {}) {
   if (!options.silent && reason === "manual") render();
 
   try {
-    const payload = await apiRequest("/api/sync", {
-      method: "POST",
-      auth: true,
-      body: {
-        state: stateForServer(),
-        clientUpdatedAt: new Date().toISOString()
-      }
-    });
+    let payload;
+    try {
+      payload = await pushStateToServer();
+    } catch (error) {
+      if (error.status !== 401 || !(await refreshApiSession())) throw error;
+      payload = await pushStateToServer();
+    }
 
     applyServerSession(payload, { keepToken: true });
     if (reason === "startup") state.currentView = "home";
@@ -750,17 +774,66 @@ async function syncWithServer(reason = "auto", options = {}) {
     if (!options.silent && reason === "manual") notify("Dados sincronizados com o PostgreSQL.");
     render();
   } catch (error) {
+    const isSessionError = error.status === 401;
     state.sync = {
       ...previousSync,
-      status: "error",
-      lastError: error.message || "Banco indisponível.",
+      status: isSessionError ? "local" : "error",
+      lastError: isSessionError ? "Sessao expirada. Entre novamente para reconectar ao banco." : error.message || "Banco indisponivel.",
       apiOnline: false
     };
+    if (isSessionError) state.auth = { ...state.auth, apiToken: "" };
     saveState({ sync: false });
-    if (!options.silent && reason === "manual") notify("Banco indisponível. Dados seguem salvos no celular.");
+    if (!options.silent && reason === "manual") notify(isSessionError ? "Entre novamente para reconectar ao banco." : "Banco indisponivel. Dados seguem salvos no celular.");
     if (!options.silent) render();
   } finally {
     syncing = false;
+  }
+}
+
+function pushStateToServer() {
+  return apiRequest("/api/sync", {
+    method: "POST",
+    auth: true,
+    body: {
+      state: stateForServer(),
+      clientUpdatedAt: new Date().toISOString()
+    }
+  });
+}
+
+async function refreshApiSession() {
+  const user = currentUser();
+  if (!user?.email || !user.password) return false;
+
+  try {
+    const payload = await apiRequest("/api/login", {
+      method: "POST",
+      body: {
+        email: user.email,
+        password: user.password
+      }
+    });
+    if (!payload?.token || !payload?.user?.email) return false;
+
+    state.auth = {
+      ...state.auth,
+      currentUserEmail: payload.user.email,
+      authView: "login",
+      trustedDevice: true,
+      apiToken: payload.token
+    };
+    state.users = upsertLocalUser(state.users, payload.user, user.password);
+    state.sync = {
+      ...defaultState.sync,
+      ...(state.sync || {}),
+      lastError: "",
+      apiOnline: true
+    };
+    saveState({ sync: false, notify: false });
+    return true;
+  } catch (error) {
+    console.warn("Nao foi possivel renovar a sessao da API.", error);
+    return false;
   }
 }
 
@@ -2328,6 +2401,7 @@ function settingsView() {
             <button class="secondary-button" type="button" data-action="export" data-hint="Baixa uma cópia dos dados em JSON.">Exportar</button>
             <button class="secondary-button" type="button" data-action="import" data-hint="Restaura um backup salvo anteriormente.">Importar</button>
             <button class="secondary-button" type="button" data-action="sync-now" data-hint="Envia os dados deste aparelho para o PostgreSQL.">Sincronizar</button>
+            <button class="secondary-button" type="button" data-action="clear-app-cache" data-hint="Remove arquivos antigos salvos pelo PWA e recarrega a versão atual.">Limpar cache</button>
             <button class="secondary-button" type="button" data-action="logout">Sair</button>
             <button class="danger-button" type="button" data-action="reset-demo">Restaurar demo</button>
           </div>
