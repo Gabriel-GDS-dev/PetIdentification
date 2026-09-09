@@ -12,8 +12,10 @@ if (!IS_LOCAL_HOST) {
 }
 
 const STORAGE_KEY = "pet-id-wallet-state-v1";
-const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v3";
+const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v4";
 const APP_NAME = "Registro Digital Animal";
+const APP_VERSION = "32";
+const APP_CACHE_NAME = `registro-digital-animal-v${APP_VERSION}`;
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
 const DOCUMENT_FILE_MAX_BYTES = 1.5 * 1024 * 1024;
@@ -288,6 +290,8 @@ let clinicsError = "";
 let clinicLocationLabel = "";
 let cepLookupTimer = null;
 let signaturePadCleanup = null;
+let localStorageWarningShown = false;
+let serviceWorkerRefreshHandled = false;
 
 const app = document.querySelector("#app");
 const toast = document.querySelector("#toast");
@@ -534,16 +538,34 @@ function init() {
   installLegacyStyleGuard();
   removeLegacyPetRecordActions();
   clearLegacyCaches();
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker
-      .register("./service-worker.js")
-      .then((registration) => {
-        registration.update?.();
-      })
-      .catch(() => {});
-  }
+  registerServiceWorker();
   render();
   syncWithServer("startup", { silent: true });
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || serviceWorkerRefreshHandled) return;
+    try {
+      if (sessionStorage.getItem("pet-id-sw-refreshed") === APP_VERSION) return;
+      sessionStorage.setItem("pet-id-sw-refreshed", APP_VERSION);
+    } catch {
+      // Storage can be blocked in installed PWAs; still reload once for the new worker.
+    }
+    serviceWorkerRefreshHandled = true;
+    window.location.reload();
+  });
+
+  navigator.serviceWorker
+    .register("./service-worker.js")
+    .then((registration) => {
+      registration.waiting?.postMessage({ type: "SKIP_WAITING" });
+      registration.update?.();
+    })
+    .catch(() => {});
 }
 
 function installLegacyStyleGuard() {
@@ -576,10 +598,11 @@ function removeLegacyPetRecordActions() {
 }
 
 async function clearLegacyCaches() {
-  if (!("caches" in window) || localStorage.getItem(LEGACY_CLEANUP_KEY) === "done") return;
   try {
+    if (!("caches" in window) || localStorage.getItem(LEGACY_CLEANUP_KEY) === "done") return;
     const keys = await caches.keys();
-    await Promise.all(keys.filter((key) => /^identificcao-pet-v2[0-7]$/.test(key)).map((key) => caches.delete(key)));
+    const oldCachePattern = /^(identificcao-pet-v2[0-9]|registro-digital-animal-v\d+)$/;
+    await Promise.all(keys.filter((key) => oldCachePattern.test(key) && key !== APP_CACHE_NAME).map((key) => caches.delete(key)));
     localStorage.setItem(LEGACY_CLEANUP_KEY, "done");
   } catch {
     // Best-effort cleanup for installed/mobile PWAs.
@@ -657,7 +680,22 @@ function normalizeOwner(partialOwner = {}) {
 }
 
 function saveState(options = {}) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.warn("Nao foi possivel salvar no armazenamento local.", error);
+    state.sync = {
+      ...defaultState.sync,
+      ...(state.sync || {}),
+      status: "error",
+      lastError: "Armazenamento local cheio ou bloqueado. A navegacao continua, mas limpe o cache se o problema voltar.",
+      apiOnline: Boolean(state.sync?.apiOnline)
+    };
+    if (options.notify !== false && !localStorageWarningShown) {
+      localStorageWarningShown = true;
+      notify("Armazenamento local cheio. Limpe o cache do app se a navegacao travar novamente.");
+    }
+  }
   if (options.sync !== false && isAuthenticated()) scheduleSync();
 }
 
