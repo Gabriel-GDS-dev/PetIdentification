@@ -258,6 +258,7 @@ function publicStartupErrorMessage(error) {
   if (message.includes("SESSION_SECRET")) return message;
   if (message.includes("DATABASE_URL") || message.includes("prisma+postgres://")) return message;
   if (["28P01", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "ECONNRESET"].includes(error?.code)) return formatDatabaseError(error);
+  if (/^[0-9A-Z]{5}$/.test(String(error?.code || ""))) return `Erro do PostgreSQL (${error.code}): ${message}`;
   return "Erro interno do servidor.";
 }
 

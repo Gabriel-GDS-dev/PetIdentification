@@ -14,10 +14,13 @@ if (!IS_LOCAL_HOST) {
 const STORAGE_KEY = "pet-id-wallet-state-v1";
 const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v4";
 const APP_NAME = "Registro Digital Animal";
-const APP_VERSION = "33";
+const APP_VERSION = "35";
 const APP_CACHE_NAME = `registro-digital-animal-v${APP_VERSION}`;
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
+const API_REQUEST_TIMEOUT_MS = 25000;
+const SYNC_REQUEST_TIMEOUT_MS = 35000;
+const SYNC_PAYLOAD_SOFT_LIMIT_BYTES = 4 * 1024 * 1024;
 const DOCUMENT_FILE_MAX_BYTES = 1.5 * 1024 * 1024;
 const WALLET_TEMPLATE_IMAGES = {
   front: "../tcc_screenshots_mobile/Frente.png",
@@ -775,15 +778,17 @@ async function syncWithServer(reason = "auto", options = {}) {
     render();
   } catch (error) {
     const isSessionError = error.status === 401;
+    const isPayloadError = error.status === 413 || error.isLocalSyncLimit;
     state.sync = {
       ...previousSync,
-      status: isSessionError ? "local" : "error",
-      lastError: isSessionError ? "Sessao expirada. Entre novamente para reconectar ao banco." : error.message || "Banco indisponivel.",
-      apiOnline: false
+      status: isSessionError || isPayloadError ? "local" : "error",
+      lastError: syncErrorMessage(error, isSessionError),
+      payloadSize: error.payloadSize || state.sync?.payloadSize || previousSync.payloadSize || 0,
+      apiOnline: isPayloadError ? true : false
     };
     if (isSessionError) state.auth = { ...state.auth, apiToken: "" };
     saveState({ sync: false });
-    if (!options.silent && reason === "manual") notify(isSessionError ? "Entre novamente para reconectar ao banco." : "Banco indisponivel. Dados seguem salvos no celular.");
+    if (!options.silent && reason === "manual") notify(syncNotifyMessage(error, isSessionError, isPayloadError));
     if (!options.silent) render();
   } finally {
     syncing = false;
@@ -791,14 +796,48 @@ async function syncWithServer(reason = "auto", options = {}) {
 }
 
 function pushStateToServer() {
+  const body = {
+    state: stateForServer(),
+    clientUpdatedAt: new Date().toISOString()
+  };
+  const serializedBody = JSON.stringify(body);
+  const bodyBytes = textByteSize(serializedBody);
+  state.sync = { ...defaultState.sync, ...(state.sync || {}), payloadSize: bodyBytes };
+
+  if (bodyBytes > SYNC_PAYLOAD_SOFT_LIMIT_BYTES) {
+    const error = new Error(`O pacote de sincronizacao tem ${formatFileSize(bodyBytes)}. Remova arquivos grandes ou use anexos menores antes de sincronizar.`);
+    error.status = 413;
+    error.isLocalSyncLimit = true;
+    error.payloadSize = bodyBytes;
+    throw error;
+  }
+
   return apiRequest("/api/sync", {
     method: "POST",
     auth: true,
-    body: {
-      state: stateForServer(),
-      clientUpdatedAt: new Date().toISOString()
-    }
+    body,
+    serializedBody,
+    timeoutMs: SYNC_REQUEST_TIMEOUT_MS
   });
+}
+
+function textByteSize(text) {
+  if ("TextEncoder" in window) return new TextEncoder().encode(String(text)).length;
+  return String(text).length;
+}
+
+function syncErrorMessage(error, isSessionError = false) {
+  if (isSessionError) return "Sessao expirada. Entre novamente para reconectar ao banco.";
+  if (error?.message) return error.message;
+  if (error?.status) return `A API retornou erro ${error.status}.`;
+  return "Banco indisponivel.";
+}
+
+function syncNotifyMessage(error, isSessionError = false, isPayloadError = false) {
+  if (isSessionError) return "Entre novamente para reconectar ao banco.";
+  if (isPayloadError) return "Dados grandes demais para sincronizar. Veja o aviso.";
+  if (error?.status) return `Sincronizacao falhou: erro ${error.status}.`;
+  return "Banco indisponivel. Dados seguem salvos no celular.";
 }
 
 async function refreshApiSession() {
@@ -853,21 +892,43 @@ async function apiRequest(path, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.auth && state.auth?.apiToken) headers.Authorization = `Bearer ${state.auth.apiToken}`;
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: options.method || "GET",
-    headers,
-    body: options.body ? JSON.stringify(options.body) : undefined
-  });
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs || API_REQUEST_TIMEOUT_MS;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: options.method || "GET",
+      headers,
+      body: options.serializedBody || (options.body ? JSON.stringify(options.body) : undefined),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      const timeoutError = new Error(`A API demorou mais de ${Math.round(timeoutMs / 1000)} segundos para responder.`);
+      timeoutError.status = 0;
+      throw timeoutError;
+    }
+    const connectionError = new Error("Nao foi possivel conectar na API. Confira a internet e tente novamente.");
+    connectionError.status = 0;
+    throw connectionError;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   let payload = null;
+  let rawText = "";
   try {
-    payload = await response.json();
+    rawText = await response.text();
+    payload = rawText ? JSON.parse(rawText) : null;
   } catch {
     payload = null;
   }
 
   if (!response.ok) {
-    const error = new Error(payload?.error || "API indisponível.");
+    const fallback = rawText && rawText.length < 240 ? rawText.trim() : "";
+    const error = new Error(payload?.error || fallback || `API indisponivel (erro ${response.status}).`);
     error.status = response.status;
     throw error;
   }
@@ -2474,6 +2535,7 @@ function syncCard() {
       <div class="detail-list" style="margin-top: 12px;">
         ${detailRow("Servidor", sync.apiOnline ? "Conectado" : "Aguardando conexão")}
         ${detailRow("Última sincronização", sync.lastSyncedAt ? formatDateTime(sync.lastSyncedAt) : "Ainda não sincronizado")}
+        ${sync.payloadSize ? detailRow("Tamanho do envio", formatFileSize(sync.payloadSize)) : ""}
         ${sync.lastError ? detailRow("Aviso", sync.lastError) : ""}
       </div>
       <div class="button-row" style="margin-top: 14px;">
@@ -3291,6 +3353,7 @@ async function downloadWalletPdf(id = "") {
 async function login(data) {
   const email = normalizeEmail(data.email);
   const password = String(data.password || "");
+  let apiLoginRejected = false;
 
   try {
     const payload = await apiRequest("/api/login", {
@@ -3303,6 +3366,9 @@ async function login(data) {
     render();
     return;
   } catch (error) {
+    if (error.status === 401) {
+      apiLoginRejected = true;
+    }
     if (error.status && error.status !== 404 && error.status !== 401) {
       notify(error.message || "Não foi possível acessar o banco.");
       return;
@@ -3320,7 +3386,14 @@ async function login(data) {
     ...state.auth,
     currentUserEmail: user.email,
     authView: "login",
-    trustedDevice: true
+    trustedDevice: true,
+    apiToken: ""
+  };
+  state.sync = {
+    ...defaultState.sync,
+    status: "local",
+    lastError: apiLoginRejected ? "A senha desta conta nao confere com o banco. Confira a senha ou redefina a senha no PostgreSQL." : "",
+    apiOnline: false
   };
 
   if (!state.owner.email) {
@@ -3328,8 +3401,8 @@ async function login(data) {
   }
 
   state.currentView = "home";
-  saveState();
-  notify(state.auth.apiToken ? "Login realizado. Sincronizando banco..." : "Login local realizado.");
+  saveState({ sync: false });
+  notify(apiLoginRejected ? "Login local. A senha nao confere com o banco." : "Login local realizado.");
   render();
 }
 
