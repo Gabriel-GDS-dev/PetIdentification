@@ -22,6 +22,67 @@ const WALLET_TEMPLATE_IMAGES = {
   back: "../tcc_screenshots_mobile/Verso.png"
 };
 
+const FEEDBACK_LIKERT_OPTIONS = [
+  { value: 1, label: "Discordo totalmente" },
+  { value: 2, label: "Discordo parcialmente" },
+  { value: 3, label: "Nem concordo nem discordo" },
+  { value: 4, label: "Concordo parcialmente" },
+  { value: 5, label: "Concordo totalmente" }
+];
+
+const FEEDBACK_LIKERT_SECTIONS = [
+  {
+    field: "improvements",
+    title: "O que pode ficar melhor?",
+    description: "Avalie o quanto cada funcionalidade ainda precisa melhorar.",
+    questions: [
+      {
+        key: "petWalletInfo",
+        summary: "Carteirinha do pet",
+        label: "As informações do pet na carteirinha precisam ficar mais claras e completas.",
+        hint: "Considere identificação, espécie, raça, idade, microchip, alergias e observações do pet."
+      },
+      {
+        key: "vaccines",
+        summary: "Vacinas",
+        label: "A área de vacinas precisa mostrar melhor dose, data de aplicação, vencimento e clínica.",
+        hint: "Pense na facilidade para conferir o histórico e saber quando a próxima vacina vence."
+      },
+      {
+        key: "travel",
+        summary: "Viagens",
+        label: "A área de viagens precisa organizar melhor checklist, documentos e dados da viagem do pet.",
+        hint: "Considere destino, data, transporte, itens obrigatórios e preparação antes da viagem."
+      }
+    ]
+  },
+  {
+    field: "suggestions",
+    title: "Sugestões e melhorias",
+    description: "Avalie o quanto cada melhoria seria útil para o app.",
+    questions: [
+      {
+        key: "petWalletInfo",
+        summary: "Carteirinha do pet",
+        label: "Mais campos opcionais sobre o pet na carteirinha ajudariam na identificação.",
+        hint: "Exemplos: comportamento, necessidades especiais, contato veterinário e cuidados importantes."
+      },
+      {
+        key: "vaccines",
+        summary: "Vacinas",
+        label: "Alertas de vencimento, filtros e destaque para vacinas atrasadas deixariam o controle mais útil.",
+        hint: "Considere lembretes, status por pet e visualização rápida das próximas doses."
+      },
+      {
+        key: "travel",
+        summary: "Viagens",
+        label: "Um checklist por pet com documentos, destino, transporte e lembretes ajudaria no planejamento.",
+        hint: "Pense em avisos antes da viagem e conferência dos itens necessários para embarque ou hospedagem."
+      }
+    ]
+  }
+];
+
 const now = new Date();
 const todayISO = toISODate(now);
 const plusDays = (days) => {
@@ -292,6 +353,10 @@ document.addEventListener("submit", async (event) => {
   const form = event.target.closest("form[data-form]");
   if (!form) return;
   event.preventDefault();
+  if (!form.checkValidity()) {
+    form.reportValidity();
+    return;
+  }
   try {
     await handleForm(form);
   } catch (error) {
@@ -1980,15 +2045,7 @@ function feedbackView() {
               </div>
             </div>
 
-            <div class="field">
-              <label for="feedback-improvements">O que pode ficar melhor?</label>
-              <textarea id="feedback-improvements" name="improvements" placeholder="Descreva o que pode melhorar na experiência do usuário, nas informações do pet ou na usabilidade do app.">${escapeHTML(currentFeedback?.improvements || "")}</textarea>
-            </div>
-
-            <div class="field">
-              <label for="feedback-suggestions">Sugestões e melhorias</label>
-              <textarea id="feedback-suggestions" name="suggestions" placeholder="Compartilhe ideias, sugestões de campos extras, consultas, documentos ou melhorias de layout.">${escapeHTML(currentFeedback?.suggestions || "")}</textarea>
-            </div>
+            ${FEEDBACK_LIKERT_SECTIONS.map((section) => renderFeedbackLikertSection(section, currentFeedback)).join("")}
 
             <div class="button-row">
               <button class="primary-button" type="submit">Salvar avaliação</button>
@@ -2005,7 +2062,7 @@ function feedbackView() {
               <div class="detail-row"><span class="detail-label">Informações do pet</span><span class="detail-value">${escapeHTML(currentFeedback.veterinarySatisfaction ? `${currentFeedback.veterinarySatisfaction}/5` : "Sem avaliação")}</span></div>
               <div class="detail-row"><span class="detail-label">Avaliação do app</span><span class="detail-value">${escapeHTML(currentFeedback.appRating ? `${currentFeedback.appRating}/5` : "Sem avaliação")}</span></div>
               <div class="detail-row"><span class="detail-label">Enviado em</span><span class="detail-value">${escapeHTML(currentFeedback.submittedAt ? formatDateTime(currentFeedback.submittedAt) : "Ainda não enviado")}</span></div>
-              <div class="detail-row"><span class="detail-label">Sugestões</span><span class="detail-value">${escapeHTML(currentFeedback.suggestions || "Sem sugestões")}</span></div>
+              ${renderFeedbackLikertSummary(currentFeedback)}
             ` : `
               <div class="empty-state">
                 <span class="empty-icon">★</span>
@@ -2019,6 +2076,128 @@ function feedbackView() {
         </div>
       </aside>
     </section>
+  `;
+}
+
+function feedbackLikertFieldName(section, question) {
+  return `feedback_${section.field}_${question.key}`;
+}
+
+function validLikertValue(value) {
+  const numericValue = Number(value);
+  return FEEDBACK_LIKERT_OPTIONS.some((option) => option.value === numericValue) ? numericValue : 0;
+}
+
+function parseFeedbackLikertValue(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return { ratings: {}, legacyText: "" };
+
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === "object" && parsed.type === "likert" && parsed.ratings && typeof parsed.ratings === "object") {
+      return { ratings: parsed.ratings, legacyText: "" };
+    }
+  } catch {
+    return { ratings: {}, legacyText: text };
+  }
+
+  return { ratings: {}, legacyText: text };
+}
+
+function feedbackLikertValue(currentFeedback, section, question) {
+  const parsed = parseFeedbackLikertValue(currentFeedback?.[section.field]);
+  return validLikertValue(parsed.ratings?.[question.key]);
+}
+
+function serializeFeedbackLikertSection(data, section) {
+  const ratings = {};
+  section.questions.forEach((question) => {
+    ratings[question.key] = validLikertValue(data[feedbackLikertFieldName(section, question)]);
+  });
+
+  return JSON.stringify({
+    type: "likert",
+    version: 1,
+    ratings
+  });
+}
+
+function formatLikertValue(value) {
+  const option = FEEDBACK_LIKERT_OPTIONS.find((item) => item.value === validLikertValue(value));
+  return option ? `${option.value}/5 ${option.label}` : "Sem resposta";
+}
+
+function renderFeedbackLikertScale() {
+  return `
+    <div class="likert-scale" aria-hidden="true">
+      ${FEEDBACK_LIKERT_OPTIONS.map((option) => `<span><strong>${option.value}</strong>${escapeHTML(option.label)}</span>`).join("")}
+    </div>
+  `;
+}
+
+function renderFeedbackLikertSection(section, currentFeedback) {
+  return `
+    <fieldset class="feedback-likert-section">
+      <legend>${escapeHTML(section.title)}</legend>
+      <p class="muted small">${escapeHTML(section.description)}</p>
+      ${renderFeedbackLikertScale()}
+      <div class="likert-list">
+        ${section.questions.map((question) => {
+          const selectedValue = feedbackLikertValue(currentFeedback, section, question);
+          return `
+            <div class="likert-question">
+              <div class="likert-question-text">
+                <strong>${escapeHTML(question.label)}</strong>
+                <span>${escapeHTML(question.hint)}</span>
+              </div>
+              <div class="likert-options" role="radiogroup" aria-label="${escapeHTML(question.label)}">
+                ${FEEDBACK_LIKERT_OPTIONS.map((option) => {
+                  const id = `${feedbackLikertFieldName(section, question)}_${option.value}`;
+                  return `
+                    <label class="likert-option" for="${id}" title="${escapeHTML(option.label)}">
+                      <input id="${id}" type="radio" name="${feedbackLikertFieldName(section, question)}" value="${option.value}" ${selectedValue === option.value ? "checked" : ""} required />
+                      <span>${option.value}</span>
+                    </label>
+                  `;
+                }).join("")}
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </fieldset>
+  `;
+}
+
+function renderFeedbackLikertSummary(currentFeedback) {
+  return `
+    <div class="feedback-summary">
+      ${FEEDBACK_LIKERT_SECTIONS.map((section) => {
+        const parsed = parseFeedbackLikertValue(currentFeedback?.[section.field]);
+        if (parsed.legacyText) {
+          return `
+            <div class="feedback-summary-section">
+              <h3>${escapeHTML(section.title)}</h3>
+              <p class="feedback-summary-text">${escapeHTML(parsed.legacyText)}</p>
+            </div>
+          `;
+        }
+
+        return `
+          <div class="feedback-summary-section">
+            <h3>${escapeHTML(section.title)}</h3>
+            <div class="feedback-summary-list">
+              ${section.questions.map((question) => `
+                <div class="feedback-summary-row">
+                  <span>${escapeHTML(question.summary)}</span>
+                  <strong>${escapeHTML(formatLikertValue(parsed.ratings?.[question.key]))}</strong>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        `;
+      }).join("")}
+    </div>
   `;
 }
 
@@ -3287,8 +3466,8 @@ async function handleForm(form) {
       submittedAt: new Date().toISOString(),
       veterinarySatisfaction: Number(data.veterinarySatisfaction || 0),
       appRating: Number(data.appRating || 0),
-      improvements: String(data.improvements || "").trim(),
-      suggestions: String(data.suggestions || "").trim(),
+      improvements: serializeFeedbackLikertSection(data, FEEDBACK_LIKERT_SECTIONS.find((section) => section.field === "improvements")),
+      suggestions: serializeFeedbackLikertSection(data, FEEDBACK_LIKERT_SECTIONS.find((section) => section.field === "suggestions")),
       petId: state.selectedPetId || state.pets[0]?.id || ""
     };
     state.feedback = Array.isArray(state.feedback) ? [...state.feedback, submission] : [submission];
