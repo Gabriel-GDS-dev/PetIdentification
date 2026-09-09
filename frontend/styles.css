@@ -1926,6 +1926,34 @@ button:disabled {
   color: #ffffff;
 }
 
+.likert-comment {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 6px;
+  min-width: 0;
+}
+
+.likert-comment[hidden] {
+  display: none;
+}
+
+.likert-comment label {
+  color: var(--ink);
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.likert-comment textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  resize: vertical;
+}
+
 .feedback-summary {
   display: grid;
   gap: 12px;
@@ -1971,6 +1999,19 @@ button:disabled {
   font-size: 0.82rem;
   overflow-wrap: anywhere;
   text-align: right;
+}
+
+.feedback-summary-row p {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.32;
+  overflow-wrap: anywhere;
 }
 
 .feedback-summary-text {
@@ -2855,6 +2896,7 @@ html[data-contrast="high"] .check-item,
 html[data-contrast="high"] .feedback-likert-section,
 html[data-contrast="high"] .likert-question,
 html[data-contrast="high"] .likert-option span,
+html[data-contrast="high"] .likert-comment textarea,
 html[data-contrast="high"] .feedback-summary-text {
   border-color: var(--line);
   border-width: 2px;

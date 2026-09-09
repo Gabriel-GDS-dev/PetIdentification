@@ -147,6 +147,21 @@ CREATE TABLE IF NOT EXISTS pet_feedback (
   PRIMARY KEY (user_id, id)
 );
 
+CREATE TABLE IF NOT EXISTS pet_feedback_answers (
+  user_id TEXT NOT NULL,
+  feedback_id TEXT NOT NULL,
+  section TEXT NOT NULL,
+  section_label TEXT NOT NULL DEFAULT '',
+  question_key TEXT NOT NULL,
+  question_label TEXT NOT NULL DEFAULT '',
+  rating INTEGER NOT NULL DEFAULT 0 CHECK (rating BETWEEN 0 AND 5),
+  comment TEXT NOT NULL DEFAULT '',
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, feedback_id, section, question_key),
+  FOREIGN KEY (user_id, feedback_id) REFERENCES pet_feedback(user_id, id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS pet_wallet_states (
   user_id TEXT PRIMARY KEY REFERENCES pet_app_users(id) ON DELETE CASCADE,
   state JSONB NOT NULL,
@@ -157,12 +172,115 @@ CREATE TABLE IF NOT EXISTS pet_wallet_states (
 CREATE INDEX IF NOT EXISTS pet_pets_user_idx ON pet_pets(user_id);
 CREATE INDEX IF NOT EXISTS pet_vaccines_user_pet_idx ON pet_vaccines(user_id, pet_id);
 CREATE INDEX IF NOT EXISTS pet_documents_user_pet_idx ON pet_documents(user_id, pet_id);
+CREATE INDEX IF NOT EXISTS pet_feedback_answers_section_idx ON pet_feedback_answers(section, question_key);
+CREATE INDEX IF NOT EXISTS pet_feedback_answers_submitted_idx ON pet_feedback_answers(submitted_at DESC);
 CREATE INDEX IF NOT EXISTS pet_wallet_states_updated_idx ON pet_wallet_states(updated_at DESC);
 
 CREATE OR REPLACE FUNCTION pet_set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION pet_feedback_likert_json(value TEXT)
+RETURNS JSONB AS $$
+DECLARE
+  payload JSONB;
+BEGIN
+  IF COALESCE(value, '') = '' THEN
+    RETURN '{}'::JSONB;
+  END IF;
+
+  BEGIN
+    payload := value::JSONB;
+  EXCEPTION WHEN others THEN
+    RETURN '{}'::JSONB;
+  END;
+
+  IF payload ->> 'type' <> 'likert' THEN
+    RETURN '{}'::JSONB;
+  END IF;
+
+  RETURN payload;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION pet_feedback_sync_answers()
+RETURNS TRIGGER AS $$
+DECLARE
+  section_name TEXT;
+  section_label TEXT;
+  payload JSONB;
+  question_keys TEXT[];
+  question_labels TEXT[];
+  question_key TEXT;
+  question_label TEXT;
+  rating_text TEXT;
+  rating_value INTEGER;
+  comment_text TEXT;
+  question_index INTEGER;
+BEGIN
+  DELETE FROM pet_feedback_answers
+  WHERE user_id = NEW.user_id
+    AND feedback_id = NEW.id;
+
+  FOREACH section_name IN ARRAY ARRAY['improvements', 'suggestions'] LOOP
+    IF section_name = 'improvements' THEN
+      section_label := 'O que pode ficar melhor?';
+      payload := pet_feedback_likert_json(NEW.improvements);
+      question_keys := ARRAY['petWalletInfo', 'vaccines', 'travel'];
+      question_labels := ARRAY[
+        'As informações do pet na carteirinha precisam ficar mais claras e completas.',
+        'A área de vacinas precisa mostrar melhor dose, data de aplicação, vencimento e clínica.',
+        'A área de viagens precisa organizar melhor checklist, documentos e dados da viagem do pet.'
+      ];
+    ELSE
+      section_label := 'Sugestões e melhorias';
+      payload := pet_feedback_likert_json(NEW.suggestions);
+      question_keys := ARRAY['petWalletInfo', 'vaccines', 'travel'];
+      question_labels := ARRAY[
+        'Mais campos opcionais sobre o pet na carteirinha ajudariam na identificação.',
+        'Alertas de vencimento, filtros e destaque para vacinas atrasadas deixariam o controle mais útil.',
+        'Um checklist por pet com documentos, destino, transporte e lembretes ajudaria no planejamento.'
+      ];
+    END IF;
+
+    FOR question_index IN 1..array_length(question_keys, 1) LOOP
+      question_key := question_keys[question_index];
+      question_label := question_labels[question_index];
+      rating_text := payload #>> ARRAY['ratings', question_key];
+
+      IF rating_text ~ '^[1-5]$' THEN
+        rating_value := rating_text::INTEGER;
+        comment_text := COALESCE(payload #>> ARRAY['comments', question_key], '');
+
+        INSERT INTO pet_feedback_answers (
+          user_id,
+          feedback_id,
+          section,
+          section_label,
+          question_key,
+          question_label,
+          rating,
+          comment,
+          submitted_at
+        ) VALUES (
+          NEW.user_id,
+          NEW.id,
+          section_name,
+          section_label,
+          question_key,
+          question_label,
+          rating_value,
+          comment_text,
+          NEW.submitted_at
+        );
+      END IF;
+    END LOOP;
+  END LOOP;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -205,6 +323,29 @@ FOR EACH ROW EXECUTE FUNCTION pet_set_updated_at();
 DROP TRIGGER IF EXISTS pet_feedback_updated_at ON pet_feedback;
 CREATE TRIGGER pet_feedback_updated_at
 BEFORE UPDATE ON pet_feedback
+FOR EACH ROW EXECUTE FUNCTION pet_set_updated_at();
+
+DROP TRIGGER IF EXISTS pet_feedback_sync_answers ON pet_feedback;
+CREATE TRIGGER pet_feedback_sync_answers
+AFTER INSERT OR UPDATE OF improvements, suggestions, submitted_at ON pet_feedback
+FOR EACH ROW EXECUTE FUNCTION pet_feedback_sync_answers();
+
+UPDATE pet_feedback f
+SET improvements = f.improvements
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM pet_feedback_answers a
+    WHERE a.user_id = f.user_id
+      AND a.feedback_id = f.id
+  )
+  AND (
+    pet_feedback_likert_json(f.improvements) <> '{}'::JSONB
+    OR pet_feedback_likert_json(f.suggestions) <> '{}'::JSONB
+  );
+
+DROP TRIGGER IF EXISTS pet_feedback_answers_updated_at ON pet_feedback_answers;
+CREATE TRIGGER pet_feedback_answers_updated_at
+BEFORE UPDATE ON pet_feedback_answers
 FOR EACH ROW EXECUTE FUNCTION pet_set_updated_at();
 
 DROP TRIGGER IF EXISTS pet_wallet_states_updated_at ON pet_wallet_states;

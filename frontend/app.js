@@ -35,6 +35,8 @@ const FEEDBACK_LIKERT_SECTIONS = [
     field: "improvements",
     title: "O que pode ficar melhor?",
     description: "Avalie o quanto cada funcionalidade ainda precisa melhorar.",
+    commentLabel: "O que exatamente pode melhorar?",
+    commentPlaceholder: "Descreva o ponto que precisa melhorar nessa funcionalidade.",
     questions: [
       {
         key: "petWalletInfo",
@@ -60,6 +62,8 @@ const FEEDBACK_LIKERT_SECTIONS = [
     field: "suggestions",
     title: "Sugestões e melhorias",
     description: "Avalie o quanto cada melhoria seria útil para o app.",
+    commentLabel: "Qual sugestão você deixaria?",
+    commentPlaceholder: "Escreva sua sugestão para essa funcionalidade.",
     questions: [
       {
         key: "petWalletInfo",
@@ -469,6 +473,10 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
+  if (event.target.matches("[data-likert-input]")) {
+    updateLikertCommentField(event.target);
+  }
+
   if (event.target.matches("[data-pet-photo]")) {
     await handlePetPhotoInput(event.target);
   }
@@ -2083,25 +2091,37 @@ function feedbackLikertFieldName(section, question) {
   return `feedback_${section.field}_${question.key}`;
 }
 
+function feedbackLikertCommentFieldName(section, question) {
+  return `${feedbackLikertFieldName(section, question)}_comment`;
+}
+
 function validLikertValue(value) {
   const numericValue = Number(value);
   return FEEDBACK_LIKERT_OPTIONS.some((option) => option.value === numericValue) ? numericValue : 0;
 }
 
+function shouldAskLikertComment(value) {
+  return validLikertValue(value) >= 4;
+}
+
 function parseFeedbackLikertValue(value = "") {
   const text = String(value || "").trim();
-  if (!text) return { ratings: {}, legacyText: "" };
+  if (!text) return { ratings: {}, comments: {}, legacyText: "" };
 
   try {
     const parsed = JSON.parse(text);
     if (parsed && typeof parsed === "object" && parsed.type === "likert" && parsed.ratings && typeof parsed.ratings === "object") {
-      return { ratings: parsed.ratings, legacyText: "" };
+      return {
+        ratings: parsed.ratings,
+        comments: parsed.comments && typeof parsed.comments === "object" ? parsed.comments : {},
+        legacyText: ""
+      };
     }
   } catch {
-    return { ratings: {}, legacyText: text };
+    return { ratings: {}, comments: {}, legacyText: text };
   }
 
-  return { ratings: {}, legacyText: text };
+  return { ratings: {}, comments: {}, legacyText: text };
 }
 
 function feedbackLikertValue(currentFeedback, section, question) {
@@ -2109,22 +2129,47 @@ function feedbackLikertValue(currentFeedback, section, question) {
   return validLikertValue(parsed.ratings?.[question.key]);
 }
 
+function feedbackLikertCommentValue(currentFeedback, section, question) {
+  const parsed = parseFeedbackLikertValue(currentFeedback?.[section.field]);
+  return String(parsed.comments?.[question.key] || "").trim();
+}
+
 function serializeFeedbackLikertSection(data, section) {
   const ratings = {};
+  const comments = {};
+
   section.questions.forEach((question) => {
-    ratings[question.key] = validLikertValue(data[feedbackLikertFieldName(section, question)]);
+    const rating = validLikertValue(data[feedbackLikertFieldName(section, question)]);
+    ratings[question.key] = rating;
+    comments[question.key] = shouldAskLikertComment(rating)
+      ? String(data[feedbackLikertCommentFieldName(section, question)] || "").trim()
+      : "";
   });
 
   return JSON.stringify({
     type: "likert",
-    version: 1,
-    ratings
+    version: 2,
+    ratings,
+    comments
   });
 }
 
 function formatLikertValue(value) {
   const option = FEEDBACK_LIKERT_OPTIONS.find((item) => item.value === validLikertValue(value));
   return option ? `${option.value}/5 ${option.label}` : "Sem resposta";
+}
+
+function updateLikertCommentField(input) {
+  const question = input.closest(".likert-question");
+  const panel = question?.querySelector("[data-likert-comment-panel]");
+  const textarea = question?.querySelector("[data-likert-comment]");
+  if (!panel || !textarea) return;
+
+  const shouldShow = shouldAskLikertComment(input.value);
+  panel.hidden = !shouldShow;
+  textarea.required = shouldShow;
+  textarea.disabled = !shouldShow;
+  if (!shouldShow) textarea.value = "";
 }
 
 function renderFeedbackLikertScale() {
@@ -2144,6 +2189,9 @@ function renderFeedbackLikertSection(section, currentFeedback) {
       <div class="likert-list">
         ${section.questions.map((question) => {
           const selectedValue = feedbackLikertValue(currentFeedback, section, question);
+          const commentValue = feedbackLikertCommentValue(currentFeedback, section, question);
+          const commentIsVisible = shouldAskLikertComment(selectedValue);
+          const commentId = `${feedbackLikertCommentFieldName(section, question)}_text`;
           return `
             <div class="likert-question">
               <div class="likert-question-text">
@@ -2155,11 +2203,15 @@ function renderFeedbackLikertSection(section, currentFeedback) {
                   const id = `${feedbackLikertFieldName(section, question)}_${option.value}`;
                   return `
                     <label class="likert-option" for="${id}" title="${escapeHTML(option.label)}">
-                      <input id="${id}" type="radio" name="${feedbackLikertFieldName(section, question)}" value="${option.value}" ${selectedValue === option.value ? "checked" : ""} required />
+                      <input id="${id}" type="radio" name="${feedbackLikertFieldName(section, question)}" value="${option.value}" data-likert-input ${selectedValue === option.value ? "checked" : ""} required />
                       <span>${option.value}</span>
                     </label>
                   `;
                 }).join("")}
+              </div>
+              <div class="likert-comment" data-likert-comment-panel ${commentIsVisible ? "" : "hidden"}>
+                <label for="${commentId}">${escapeHTML(section.commentLabel)}</label>
+                <textarea id="${commentId}" name="${feedbackLikertCommentFieldName(section, question)}" data-likert-comment placeholder="${escapeHTML(section.commentPlaceholder)}" ${commentIsVisible ? "required" : "disabled"}>${escapeHTML(commentValue)}</textarea>
               </div>
             </div>
           `;
@@ -2187,12 +2239,16 @@ function renderFeedbackLikertSummary(currentFeedback) {
           <div class="feedback-summary-section">
             <h3>${escapeHTML(section.title)}</h3>
             <div class="feedback-summary-list">
-              ${section.questions.map((question) => `
-                <div class="feedback-summary-row">
-                  <span>${escapeHTML(question.summary)}</span>
-                  <strong>${escapeHTML(formatLikertValue(parsed.ratings?.[question.key]))}</strong>
-                </div>
-              `).join("")}
+              ${section.questions.map((question) => {
+                const comment = String(parsed.comments?.[question.key] || "").trim();
+                return `
+                  <div class="feedback-summary-row">
+                    <span>${escapeHTML(question.summary)}</span>
+                    <strong>${escapeHTML(formatLikertValue(parsed.ratings?.[question.key]))}</strong>
+                    ${comment ? `<p>${escapeHTML(comment)}</p>` : ""}
+                  </div>
+                `;
+              }).join("")}
             </div>
           </div>
         `;
