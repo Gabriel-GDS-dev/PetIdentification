@@ -8,7 +8,7 @@ echo - Deixe o computador ligado.
 echo - Conecte computador e celular na mesma rede Wi-Fi.
 echo - Use no celular o endereco mostrado no terminal.
 echo.
-echo Iniciando banco e servidor...
+echo Iniciando servidor...
 echo.
 call npm run celular
 echo.

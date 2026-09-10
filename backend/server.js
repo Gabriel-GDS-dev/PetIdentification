@@ -8,7 +8,7 @@ const { createPoolWithSchema, formatDatabaseError, getDatabaseName } = require("
 const PORT = Number(process.env.PORT || 5241);
 const HOST = process.env.HOST || "0.0.0.0";
 const SESSION_SECRET = process.env.SESSION_SECRET || (process.env.VERCEL ? "" : "pet-identification-dev-secret");
-const MAX_JSON_BYTES = 8 * 1024 * 1024;
+const MAX_JSON_BYTES = 4 * 1024 * 1024;
 const EXTERNAL_REQUEST_TIMEOUT_MS = 22000;
 const OVERPASS_REQUEST_TIMEOUT_MS = 12000;
 const OVERPASS_API_URL = process.env.OVERPASS_API_URL || "https://overpass-api.de/api/interpreter";
@@ -226,7 +226,7 @@ function cleanText(value) { return String(value ?? "").trim(); }
 function normalizeEmail(value) { return cleanText(value).toLowerCase(); }
 function coerceDate(value) { const text = cleanText(value); if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null; return text; }
 function coerceTimestamp(value) { const text = cleanText(value); if (!text) return null; const date = new Date(text); return Number.isNaN(date.getTime()) ? null : date.toISOString(); }
-async function readJson(request) { const chunks = []; let total = 0; for await (const chunk of request) { total += chunk.length; if (total > MAX_JSON_BYTES) throw httpError(413, "JSON muito grande."); chunks.push(chunk); } if (!chunks.length) return {}; try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw httpError(400, "JSON invalido."); } }
+async function readJson(request) { const chunks = []; let total = 0; for await (const chunk of request) { total += chunk.length; if (total > MAX_JSON_BYTES) throw httpError(413, "JSON muito grande para a API da Vercel."); chunks.push(chunk); } if (!chunks.length) return {}; try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw httpError(400, "JSON invalido."); } }
 function serveStatic(url, response, headOnly = false) { const pathname = url.pathname === "/" ? "/index.html" : url.pathname, extraFilePath = EXTRA_STATIC_FILES.get(url.pathname) || EXTRA_STATIC_FILES.get(pathname); if (!extraFilePath && !STATIC_FILES.has(url.pathname) && !STATIC_FILES.has(pathname)) return sendText(response, 404, "Arquivo nao encontrado."); const publicRoot = path.resolve(PUBLIC_DIR), extraRoot = path.resolve(PROJECT_DIR, "tcc_screenshots_mobile"), filePath = extraFilePath ? path.resolve(extraFilePath) : path.resolve(publicRoot, pathname.replace(/^\/+/, "")), allowedRoot = extraFilePath ? extraRoot : publicRoot; if (!filePath.startsWith(allowedRoot)) return sendText(response, 403, "Acesso negado."); fs.stat(filePath, (error, stats) => { if (error || !stats.isFile()) return sendText(response, 404, "Arquivo nao encontrado."); const extension = path.extname(filePath); response.writeHead(200, { "Content-Type": CONTENT_TYPES[extension] || "application/octet-stream", "Cache-Control": extension === ".html" ? "no-store" : "no-cache" }); if (headOnly) return response.end(); fs.createReadStream(filePath).pipe(response); }); }
 function sendJson(response, statusCode, payload) { response.writeHead(statusCode, { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type, Authorization", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Content-Type": "application/json; charset=utf-8" }); if (statusCode === 204) return response.end(); return response.end(JSON.stringify(payload)); }
 function sendText(response, statusCode, text) { response.writeHead(statusCode, { "Content-Type": "text/plain; charset=utf-8" }); response.end(text); }

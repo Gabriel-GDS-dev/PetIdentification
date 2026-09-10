@@ -1,6 +1,6 @@
 # Registro Digital Animal - Carteira Digital para Pets
 
-PWA para carteira digital de pets com frontend separado, backend Node e PostgreSQL.
+PWA para carteira digital de pets com frontend separado, backend Node e MongoDB.
 
 ## Estrutura
 
@@ -16,8 +16,6 @@ PetIdentification/
   backend/
     server.js
     database.js
-    db/schema.sql
-    scripts/setup-db.js
     package.json
   package.json
   README.md
@@ -28,8 +26,7 @@ PetIdentification/
 Na raiz do projeto:
 
 ```powershell
-npm.cmd --prefix backend install
-npm.cmd run db:setup
+npm.cmd install
 ```
 
 ## Rodar no computador
@@ -40,7 +37,7 @@ Use:
 npm.cmd start
 ```
 
-Esse comando inicia o PostgreSQL local, libera a porta `5241` caso uma instância antiga deste app tenha ficado aberta, e inicia backend + frontend.
+Esse comando libera a porta `5241` caso uma instância antiga deste app tenha ficado aberta e inicia backend + frontend.
 
 No computador, abra:
 
@@ -80,7 +77,7 @@ Requisitos:
 - O celular e o computador precisam estar na mesma rede Wi-Fi.
 - Se o celular não abrir o endereço, libere o Node.js no Firewall do Windows para redes privadas.
 
-O app salva primeiro no celular para funcionar offline. Quando o servidor está acessível, ele sincroniza com a API `/api/sync` e grava no PostgreSQL.
+O app salva primeiro no celular para funcionar offline. Quando o servidor está acessível, ele sincroniza com a API `/api/sync` e grava no MongoDB.
 
 ## Usar de qualquer lugar pela internet
 
@@ -90,7 +87,7 @@ Para deixar o PC de casa rodando e usar o app na faculdade, use:
 npm.cmd run internet
 ```
 
-Na primeira vez, o comando baixa o `cloudflared` oficial dentro de `.runtime/tools`. Depois ele inicia o PostgreSQL, inicia o backend local e abre um túnel HTTPS público.
+Na primeira vez, o comando baixa o `cloudflared` oficial dentro de `.runtime/tools`. Depois ele inicia o backend local e abre um túnel HTTPS público.
 
 Quando ficar pronto, o terminal mostrará um link parecido com:
 
@@ -142,16 +139,13 @@ http://127.0.0.1:5241/
 
 ## Banco de dados
 
-Para iniciar somente o banco:
+Para usar MongoDB local, inicie seu `mongod` manualmente ou use o MongoDB Atlas.
+
+Para usar outro MongoDB local ou Atlas, defina a conexão antes dos comandos:
 
 ```powershell
-npm.cmd run db:start
-```
-
-Para usar outro MongoDB local, defina a conexão antes dos comandos:
-
-```powershell
-$env:DATABASE_URL="postgres://USUARIO:SENHA@SERVIDOR:5432/pet_identification"
+$env:MONGODB_URI="mongodb+srv://USUARIO:SENHA@SEU-CLUSTER.mongodb.net/?retryWrites=true&w=majority"
+$env:MONGODB_DB="pet_identification"
 ```
 
 ## Deploy pelo GitHub na Vercel
@@ -202,6 +196,8 @@ Se `/api/login` ou `/api/register` retornar `500`, confira em **Settings > Envir
 
 Após alterar qualquer variável, faça **Redeploy**. Consulte **Deployments > Functions > Logs** para confirmar a causa. Não use a URI do MongoDB em código, GitHub, `.env` versionado ou mensagens públicas.
 
+Se o app mostrar **Dados grandes demais para sincronizar**, o MongoDB pode estar conectado corretamente. Esse aviso acontece quando fotos, PDFs ou scans deixam o JSON acima do limite de payload da Function na Vercel. Remova anexos grandes, reenvie imagens menores ou mova anexos para um storage separado antes de sincronizar.
+
 ### 3. Validar após o deploy
 
 Abra estas URLs usando o domínio da Vercel:
@@ -211,7 +207,7 @@ https://SEU-DOMINIO.vercel.app/
 https://SEU-DOMINIO.vercel.app/api/health
 ```
 
-O segundo endereço deve responder JSON com `"ok": true`. Se a API retornar erro de banco, confira a URL, permissões e SSL do PostgreSQL no painel da Vercel.
+O segundo endereço deve responder JSON com `"ok": true`. Se a API retornar erro de banco, confira a URI, permissões e Network Access do MongoDB Atlas.
 
 ## Funcionalidades principais
 
@@ -225,7 +221,7 @@ O segundo endereço deve responder JSON com `"ok": true`. Se a API retornar erro
 - Upload de documentos do pet com foto/scan ou PDF.
 - Download da carteira em PDF com frente, verso e slides dos documentos.
 - Cadastro e login via API com senha em hash.
-- Sincronização offline/online com PostgreSQL.
+- Sincronização offline/online com MongoDB.
 - Manifest e service worker para PWA.
 
 As consultas de veterinárias usam a localização somente quando o tutor autoriza. O CEP é usado como alternativa. As integrações públicas respeitam a atribuição e os limites de uso do ViaCEP e do OpenStreetMap.

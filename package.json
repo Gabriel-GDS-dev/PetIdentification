@@ -11,7 +11,7 @@
     "mongodb": "^6.21.0"
   },
   "scripts": {
-    "db:start": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File backend\\scripts\\start-local-db.ps1",
+    "db:start": "node -e \"console.log('MongoDB local: inicie seu mongod ou defina MONGODB_URI para o Atlas.')\"",
     "android:prepare": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File backend\\scripts\\prepare-android.ps1",
     "server:stop": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File backend\\scripts\\stop-server.ps1",
     "internet": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File backend\\scripts\\start-internet.ps1",

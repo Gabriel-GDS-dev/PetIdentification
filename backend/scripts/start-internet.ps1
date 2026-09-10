@@ -119,8 +119,6 @@ $tunnelProcess = $null
 try {
   Enable-KeepAwake
 
-  & (Join-Path $PSScriptRoot "start-local-db.ps1")
-
   $owners = @(Get-PortOwnerIds -Port $port)
   if ($owners.Count) {
     if (-not (Stop-PetServerOnPort -Port $port)) {
