@@ -14,7 +14,7 @@ if (!IS_LOCAL_HOST) {
 const STORAGE_KEY = "pet-id-wallet-state-v1";
 const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v4";
 const APP_NAME = "Registro Digital Animal";
-const APP_VERSION = "37";
+const APP_VERSION = "38";
 const APP_CACHE_NAME = `registro-digital-animal-v${APP_VERSION}`;
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
@@ -759,10 +759,14 @@ async function syncWithServer(reason = "auto", options = {}) {
   try {
     let payload;
     try {
-      payload = await pushStateToServer();
+      payload = reason === "startup"
+        ? await getStateFromServer()
+        : await pushStateToServer();
     } catch (error) {
       if (error.status !== 401 || !(await refreshApiSession())) throw error;
-      payload = await pushStateToServer();
+      payload = reason === "startup"
+        ? await getStateFromServer()
+        : await pushStateToServer();
     }
 
     applyServerSession(payload, { keepToken: true });
@@ -818,6 +822,14 @@ function pushStateToServer() {
     body,
     serializedBody,
     timeoutMs: SYNC_REQUEST_TIMEOUT_MS
+  });
+}
+
+function getStateFromServer() {
+  return apiRequest("/api/state", {
+    method: "GET",
+    auth: true,
+    timeoutMs: API_REQUEST_TIMEOUT_MS
   });
 }
 
