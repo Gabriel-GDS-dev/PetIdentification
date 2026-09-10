@@ -3,7 +3,7 @@ const path = require("node:path");
 const http = require("node:http");
 const os = require("node:os");
 const crypto = require("node:crypto");
-const { createPoolWithSchema, formatDatabaseError, getDatabaseName, getDatabaseUrl } = require("./database");
+const { createPoolWithSchema, formatDatabaseError, getDatabaseName } = require("./database");
 
 const PORT = Number(process.env.PORT || 5241);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -50,7 +50,7 @@ async function main() {
   server.listen(PORT, HOST, () => {
     console.log(`Registro Digital Animal rodando no computador: http://127.0.0.1:${PORT}`);
     for (const accessUrl of getNetworkAccessUrls(PORT)) console.log(`Abra no celular conectado ao mesmo Wi-Fi: ${accessUrl}`);
-    console.log(`Banco conectado: ${getDatabaseName(getDatabaseUrl())}`);
+    console.log(`Banco conectado: MongoDB/${getDatabaseName()}`);
   });
 }
 async function initializePool() {
@@ -89,9 +89,17 @@ async function handleRequest(request, response) {
 }
 async function handleApi(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/health") {
-    await pool.query("SELECT 1");
-    const counts = await pool.query(`SELECT (SELECT count(*)::int FROM pet_app_users) AS users,(SELECT count(*)::int FROM pet_pets) AS pets,(SELECT count(*)::int FROM pet_vaccines) AS vaccines,(SELECT count(*)::int FROM pet_documents) AS documents`);
-    return sendJson(response, 200, { ok: true, database: getDatabaseName(getDatabaseUrl()), counts: counts.rows[0] });
+    await pool.database.command({ ping: 1 });
+    const users = await pool.database.collection("users").countDocuments();
+    const states = await pool.database.collection("wallet_states").find({}, { projection: { state: 1 } }).toArray();
+    const counts = states.reduce((total, item) => {
+      const state = item.state || {};
+      total.pets += Array.isArray(state.pets) ? state.pets.length : 0;
+      total.vaccines += Array.isArray(state.vaccines) ? state.vaccines.length : 0;
+      total.documents += Array.isArray(state.documents) ? state.documents.length : 0;
+      return total;
+    }, { users, pets: 0, vaccines: 0, documents: 0 });
+    return sendJson(response, 200, { ok: true, database: getDatabaseName(), counts });
   }
   if (request.method === "GET" && url.pathname === "/api/address/cep") return lookupAddressByCep(response, url.searchParams.get("cep"));
   if (request.method === "GET" && url.pathname === "/api/clinics/nearby") return findNearbyClinics(response, url.searchParams);
@@ -256,10 +264,74 @@ async function vercelHandler(request, response) {
 function publicStartupErrorMessage(error) {
   const message = String(error?.message || "");
   if (message.includes("SESSION_SECRET")) return message;
-  if (message.includes("DATABASE_URL") || message.includes("prisma+postgres://")) return message;
+  if (message.includes("MONGODB_URI")) return message;
   if (["28P01", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "ECONNRESET"].includes(error?.code)) return formatDatabaseError(error);
-  if (/^[0-9A-Z]{5}$/.test(String(error?.code || ""))) return `Erro do PostgreSQL (${error.code}): ${message}`;
+  if (/^[0-9A-Z]{5}$/.test(String(error?.code || ""))) return `Erro do MongoDB (${error.code}): ${message}`;
   return "Erro interno do servidor.";
+}
+
+// MongoDB stores the user documents and the complete wallet state atomically.
+async function registerUser(response, body) {
+  const name = cleanText(body.name);
+  const email = normalizeEmail(body.email);
+  const phone = cleanText(body.phone);
+  const password = String(body.password || "");
+  if (!name || !email || !phone || !password) return sendJson(response, 400, { error: "Preencha nome, e-mail, telefone e senha." });
+  if (password.length < 4) return sendJson(response, 400, { error: "Use uma senha com pelo menos 4 caracteres." });
+
+  const user = {
+    id: crypto.randomUUID(),
+    name,
+    email,
+    email_normalized: email,
+    phone,
+    password_hash: hashPassword(password),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  try {
+    await pool.database.collection("users").insertOne(user);
+  } catch (error) {
+    if (error?.code === 11000) return sendJson(response, 409, { error: "Este e-mail ja esta cadastrado." });
+    throw error;
+  }
+  return sendJson(response, 201, { user: publicUser(user), token: signToken(user), state: null });
+}
+
+async function loginUser(response, body) {
+  const email = normalizeEmail(body.email);
+  const password = String(body.password || "");
+  const user = await findUserByEmail(email);
+  if (!user || !verifyPassword(password, user.password_hash)) return sendJson(response, 401, { error: "E-mail ou senha invalidos." });
+  return sendJson(response, 200, { user: publicUser(user), token: signToken(user), state: await getStoredState(user) });
+}
+
+async function findUserByEmail(email) {
+  return pool.database.collection("users").findOne({ email_normalized: normalizeEmail(email) });
+}
+
+async function findUserById(id) {
+  return pool.database.collection("users").findOne({ id });
+}
+
+async function getStoredState(user) {
+  const stored = await pool.database.collection("wallet_states").findOne({ user_id: user.id });
+  return stored ? stateForClient(stored.state, user) : null;
+}
+
+async function saveWalletState(user, incomingState, clientUpdatedAt) {
+  const state = sanitizeIncomingState(incomingState, user);
+  await pool.database.collection("wallet_states").replaceOne(
+    { user_id: user.id },
+    {
+      user_id: user.id,
+      state,
+      client_updated_at: coerceTimestamp(clientUpdatedAt),
+      updated_at: new Date().toISOString()
+    },
+    { upsert: true }
+  );
+  return stateForClient(state, user);
 }
 
 module.exports = { handleRequest, initializePool, vercelHandler };

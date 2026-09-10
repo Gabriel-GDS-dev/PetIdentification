@@ -1,132 +1,56 @@
-const fs = require("node:fs/promises");
-const path = require("node:path");
-const { Client, Pool } = require("pg");
+const { MongoClient, ServerApiVersion } = require("mongodb");
 
-const DEFAULT_DATABASE_URL = "postgres://postgres@127.0.0.1:55432/pet_identification";
+const DEFAULT_MONGODB_URI = "mongodb://127.0.0.1:27017";
+const DEFAULT_MONGODB_DB = "pet_identification";
 
-function getDatabaseUrl() {
-  const candidates = [
-    process.env.DATABASE_URL,
-    process.env.POSTGRES_PRISMA_URL,
-    process.env.POSTGRES_URL,
-    process.env.POSTGRES_URL_NON_POOLING,
-    process.env.POSTGRES_URL_NO_SSL
-  ].filter(Boolean);
-  const databaseUrl = candidates.find((url) => /^postgres(ql)?:\/\//i.test(url))
-    || (process.env.VERCEL ? "" : DEFAULT_DATABASE_URL);
-  if (!databaseUrl) {
-    if (candidates.some((url) => /^prisma\+postgres:\/\//i.test(url))) {
-      throw new Error("A Vercel recebeu apenas URL prisma+postgres://. Adicione uma URL SQL PostgreSQL em DATABASE_URL, POSTGRES_URL ou POSTGRES_URL_NON_POOLING.");
-    }
-    throw new Error("DATABASE_URL nao configurado no ambiente da Vercel.");
-  }
-  return databaseUrl;
+let clientPromise;
+
+function getMongoUri() {
+  const uri = process.env.MONGODB_URI || (process.env.VERCEL ? "" : DEFAULT_MONGODB_URI);
+  if (!uri) throw new Error("MONGODB_URI nao configurado no ambiente da Vercel.");
+  return uri;
+}
+
+function getDatabaseName() {
+  return process.env.MONGODB_DB || DEFAULT_MONGODB_DB;
 }
 
 function formatDatabaseError(error) {
-  if (error?.code === "28P01") {
-    return [
-      "Falha de autenticacao no PostgreSQL.",
-      "Confira a variavel DATABASE_URL ou remova-a para usar o banco local automatico na porta 55432."
-    ].join("\n");
+  if (error?.code === 11000) return "Este e-mail ja esta cadastrado.";
+  if (["ENOTFOUND", "ECONNREFUSED", "ETIMEDOUT", "ECONNRESET"].includes(error?.code)) {
+    return "Nao foi possivel conectar ao MongoDB. Confira MONGODB_URI, a lista de IPs permitidos no Atlas e as credenciais.";
   }
-
-  if (error?.code === "ECONNREFUSED") {
-    return [
-      "O PostgreSQL local nao esta em execucao.",
-      "Rode 'npm run db:start' e tente novamente."
-    ].join("\n");
-  }
-
-  return error?.message || "Erro desconhecido ao acessar o PostgreSQL.";
-}
-
-function getDatabaseName(databaseUrl = getDatabaseUrl()) {
-  const parsed = new URL(databaseUrl);
-  return decodeURIComponent(parsed.pathname.replace(/^\/+/, ""));
-}
-
-function quoteIdentifier(value) {
-  return `"${String(value).replaceAll('"', '""')}"`;
-}
-
-async function ensureDatabase(databaseUrl = getDatabaseUrl()) {
-  if (process.env.SKIP_DATABASE_CREATE === "true" || process.env.VERCEL === "1") return;
-
-  const parsed = new URL(databaseUrl);
-  const databaseName = getDatabaseName(databaseUrl);
-  if (!databaseName || databaseName === "postgres") return;
-
-  const maintenanceUrl = new URL(parsed);
-  maintenanceUrl.pathname = "/postgres";
-
-  const client = new Client({ connectionString: maintenanceUrl.toString() });
-  await client.connect();
-  try {
-    const existing = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [databaseName]);
-    if (!existing.rowCount) {
-      await client.query(`CREATE DATABASE ${quoteIdentifier(databaseName)}`);
-    }
-  } finally {
-    await client.end();
-  }
-}
-
-const MIGRATION_SQL = `
-  ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS pet_id TEXT NOT NULL DEFAULT '';
-  ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS destination TEXT NOT NULL DEFAULT '';
-  ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS travel_date DATE;
-  ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS transport TEXT NOT NULL DEFAULT '';
-  ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS selected_pet_id TEXT NOT NULL DEFAULT '';
-  ALTER TABLE pet_travel_plans ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
-
-  ALTER TABLE pet_travel_items ADD COLUMN IF NOT EXISTS pet_id TEXT NOT NULL DEFAULT '';
-  ALTER TABLE pet_travel_items ADD COLUMN IF NOT EXISTS item_key TEXT NOT NULL DEFAULT '';
-  ALTER TABLE pet_travel_items ADD COLUMN IF NOT EXISTS checked BOOLEAN NOT NULL DEFAULT false;
-
-  ALTER TABLE pet_travel_plans DROP CONSTRAINT IF EXISTS pet_travel_plans_pkey;
-  ALTER TABLE pet_travel_plans ADD CONSTRAINT pet_travel_plans_pkey PRIMARY KEY (user_id, pet_id);
-
-  ALTER TABLE pet_travel_items DROP CONSTRAINT IF EXISTS pet_travel_items_pkey;
-  ALTER TABLE pet_travel_items ADD CONSTRAINT pet_travel_items_pkey PRIMARY KEY (user_id, pet_id, item_key);
-`;
-
-async function applySchema(pool) {
-  const schemaPath = path.join(__dirname, "db", "schema.sql");
-  const schema = await fs.readFile(schemaPath, "utf8");
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query("SELECT pg_advisory_xact_lock(hashtext('pet-identification-schema-v1'))");
-    await client.query(schema);
-    await client.query(MIGRATION_SQL);
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+  return error?.message || "Erro desconhecido ao acessar o MongoDB.";
 }
 
 async function createPoolWithSchema() {
-  const databaseUrl = getDatabaseUrl();
-  await ensureDatabase(databaseUrl);
-  const pool = new Pool({
-    connectionString: databaseUrl,
-    max: process.env.VERCEL ? 3 : 10,
-    connectionTimeoutMillis: 10000,
-    idleTimeoutMillis: process.env.VERCEL ? 10000 : 30000
-  });
-  await applySchema(pool);
-  return pool;
+  if (!clientPromise) {
+    const client = new MongoClient(getMongoUri(), {
+      serverApi: {
+        version: ServerApiVersion.v1,
+        strict: true,
+        deprecationErrors: true
+      },
+      maxPoolSize: process.env.VERCEL ? 5 : 10,
+      serverSelectionTimeoutMS: 10000
+    });
+    clientPromise = client.connect().catch((error) => {
+      clientPromise = undefined;
+      throw error;
+    });
+  }
+
+  const client = await clientPromise;
+  const database = client.db(getDatabaseName());
+  await database.collection("users").createIndex({ email_normalized: 1 }, { unique: true });
+  await database.collection("wallet_states").createIndex({ user_id: 1 }, { unique: true });
+  await database.command({ ping: 1 });
+  return { client, database };
 }
 
 module.exports = {
-  applySchema,
   createPoolWithSchema,
-  ensureDatabase,
   formatDatabaseError,
   getDatabaseName,
-  getDatabaseUrl
+  getMongoUri
 };

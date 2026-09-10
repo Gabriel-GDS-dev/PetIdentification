@@ -148,7 +148,7 @@ Para iniciar somente o banco:
 npm.cmd run db:start
 ```
 
-Para usar outro PostgreSQL, defina a conexão antes dos comandos:
+Para usar outro MongoDB local, defina a conexão antes dos comandos:
 
 ```powershell
 $env:DATABASE_URL="postgres://USUARIO:SENHA@SERVIDOR:5432/pet_identification"
@@ -160,7 +160,7 @@ O repositório já está preparado para a Vercel:
 
 - `frontend/` é publicado como site estático/PWA.
 - `api/[...path].js` executa a API Node como Function serverless.
-- A API usa PostgreSQL gerenciado por `DATABASE_URL`; não use o PostgreSQL local no deploy.
+- A API usa MongoDB Atlas por meio de `MONGODB_URI`; não use um banco local no deploy.
 
 ### 1. Subir o projeto para o GitHub
 
@@ -172,23 +172,23 @@ git commit -m "Preparar deploy na Vercel"
 git push origin main
 ```
 
-Nunca adicione `.env`, senhas ou `DATABASE_URL` real ao repositório. Use `.env.example` apenas como referência.
+Nunca adicione `.env`, senhas ou `MONGODB_URI` real ao repositório. Use `.env.example` apenas como referência.
 
 ### 2. Criar o projeto na Vercel
 
 1. Acesse **Add New > Project** e importe o repositório do GitHub.
 2. Mantenha a raiz do projeto como **Root Directory**.
 3. Use o preset **Other** (o `vercel.json` já define as rotas).
-4. Em **Environment Variables**, adicione `DATABASE_URL` e `SESSION_SECRET` para **Production**, **Preview** e **Development**.
+4. Em **Environment Variables**, adicione `MONGODB_URI`, `MONGODB_DB` e `SESSION_SECRET` para **Production**, **Preview** e **Development**.
 5. Faça o deploy.
 
-`SESSION_SECRET` deve ser um segredo aleatório longo e igual entre os deploys. `DATABASE_URL` deve apontar para um PostgreSQL acessível pela internet e com SSL quando o provedor exigir. O schema é aplicado automaticamente quando a Function inicializa.
+`SESSION_SECRET` deve ser um segredo aleatório longo e igual entre os deploys. `MONGODB_URI` deve ser a connection string do MongoDB Atlas, sem aspas. Os índices são criados automaticamente quando a Function inicializa.
 
-### Prisma Postgres
+### MongoDB Atlas
 
-Para o Prisma Postgres, use a URL **pooled** fornecida pelo painel (normalmente com `pooled.db.prisma.io` e `sslmode=require`) como valor de `DATABASE_URL`. Cole a URL diretamente no campo da Vercel, sem aspas e sem colocá-la em arquivos versionados. Por segurança, se uma URL real foi compartilhada fora do painel da Vercel, gere uma nova senha/token no Prisma antes de continuar.
+No Atlas, use **Connect > Drivers > Node.js** e copie a URI `mongodb+srv://...`. Substitua `<password>` pela senha do usuário do banco, faça URL-encode de caracteres especiais da senha e informe o nome do banco em `MONGODB_DB`. Nunca coloque a URI real no GitHub ou no código.
 
-Depois de salvar as variáveis, faça **Redeploy**. A aplicação cria as tabelas do arquivo `backend/db/schema.sql` na primeira inicialização da Function; não é necessário rodar `db:start` na Vercel.
+Depois de salvar as variáveis, faça **Redeploy**. A aplicação cria os índices das coleções `users` e `wallet_states` na primeira inicialização da Function; não é necessário rodar `db:start` na Vercel.
 
 ### Erros de login e manifest após publicar
 
@@ -196,11 +196,11 @@ Se o navegador mostrar uma URL `vercel.com/sso-api` no carregamento de `manifest
 
 Se `/api/login` ou `/api/register` retornar `500`, confira em **Settings > Environment Variables**:
 
-- `DATABASE_URL` contém a URL pooled do Prisma Postgres, com `sslmode=require`.
-- Caso a integração tenha criado `POSTGRES_PRISMA_URL` ou `POSTGRES_URL` em vez de `DATABASE_URL`, o backend também aceita esses nomes.
+- `MONGODB_URI` contém a URI do Atlas e a senha está correta.
+- O IP da Vercel está permitido em **Atlas > Network Access**. Para um primeiro teste, use `0.0.0.0/0` com um usuário de banco restrito.
 - `SESSION_SECRET` está preenchido nos mesmos ambientes do deployment.
 
-Após alterar qualquer variável, faça **Redeploy**. Consulte **Deployments > Functions > Logs** para confirmar a causa. Não use a URL do Prisma em código, GitHub, `.env` versionado ou mensagens públicas.
+Após alterar qualquer variável, faça **Redeploy**. Consulte **Deployments > Functions > Logs** para confirmar a causa. Não use a URI do MongoDB em código, GitHub, `.env` versionado ou mensagens públicas.
 
 ### 3. Validar após o deploy
 
