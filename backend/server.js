@@ -266,6 +266,7 @@ function publicStartupErrorMessage(error) {
   if (message.includes("SESSION_SECRET")) return message;
   if (message.includes("MONGODB_URI")) return message;
   if (["28P01", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "ECONNRESET"].includes(error?.code)) return formatDatabaseError(error);
+  if (String(error?.name || "").startsWith("Mongo") || /bad auth|authentication failed/i.test(message)) return formatDatabaseError(error);
   if (/^[0-9A-Z]{5}$/.test(String(error?.code || ""))) return `Erro do MongoDB (${error.code}): ${message}`;
   return "Erro interno do servidor.";
 }

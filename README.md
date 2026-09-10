@@ -191,6 +191,7 @@ Se o navegador mostrar uma URL `vercel.com/sso-api` no carregamento de `manifest
 Se `/api/login` ou `/api/register` retornar `500`, confira em **Settings > Environment Variables**:
 
 - `MONGODB_URI` contém a URI do Atlas e a senha está correta.
+- Se os logs mostrarem `MongoServerError` com `code: 8000` ou `bad auth : authentication failed`, recrie/reset a senha do usuário em **Atlas > Database Access** e atualize `MONGODB_URI` na Vercel. Caracteres especiais na senha precisam estar em URL encode.
 - O IP da Vercel está permitido em **Atlas > Network Access**. Para um primeiro teste, use `0.0.0.0/0` com um usuário de banco restrito.
 - `SESSION_SECRET` está preenchido nos mesmos ambientes do deployment.
 

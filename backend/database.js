@@ -16,11 +16,15 @@ function getDatabaseName() {
 }
 
 function formatDatabaseError(error) {
+  const message = String(error?.message || "");
   if (error?.code === 11000) return "Este e-mail ja esta cadastrado.";
+  if (error?.code === 8000 || /bad auth|authentication failed/i.test(message)) {
+    return "O MongoDB recusou usuario ou senha. Confira o usuario, a senha e o encode da senha em MONGODB_URI no painel da Vercel.";
+  }
   if (["ENOTFOUND", "ECONNREFUSED", "ETIMEDOUT", "ECONNRESET"].includes(error?.code)) {
     return "Nao foi possivel conectar ao MongoDB. Confira MONGODB_URI, a lista de IPs permitidos no Atlas e as credenciais.";
   }
-  return error?.message || "Erro desconhecido ao acessar o MongoDB.";
+  return message || "Erro desconhecido ao acessar o MongoDB.";
 }
 
 async function createPoolWithSchema() {
