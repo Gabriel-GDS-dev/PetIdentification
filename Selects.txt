@@ -1,0 +1,286 @@
+CONSULTAS MONGODB DO FEEDBACK
+=============================
+
+Como usar:
+1. Abra o MongoDB Compass ou o mongosh.
+2. Se estiver usando mongosh, selecione o banco:
+
+use pet_identification
+
+3. Execute uma consulta por vez.
+
+Coleção usada:
+  wallet_states
+
+Estrutura importante:
+  wallet_states.state.feedback[]
+  wallet_states.state.feedback[].veterinarySatisfaction = estrelas das informações do pet
+  wallet_states.state.feedback[].appRating = estrelas da avaliação do app
+  wallet_states.state.feedback[].improvements = perguntas de melhorias
+  wallet_states.state.feedback[].suggestions = perguntas de sugestões
+
+
+1) Ver todos os feedbacks enviados
+-----------------------------------
+
+db.wallet_states.aggregate([
+  { $unwind: "$state.feedback" },
+  {
+    $project: {
+      _id: 0,
+      user_id: 1,
+      feedback_id: "$state.feedback.id",
+      data_envio: "$state.feedback.submittedAt",
+      pet_id: "$state.feedback.petId",
+      estrelas_informacoes_pet: "$state.feedback.veterinarySatisfaction",
+      estrelas_app: "$state.feedback.appRating",
+      melhorias: "$state.feedback.improvements",
+      sugestoes: "$state.feedback.suggestions"
+    }
+  },
+  { $sort: { data_envio: -1 } }
+]);
+
+
+2) Média das duas avaliações com estrelas
+------------------------------------------
+
+db.wallet_states.aggregate([
+  { $unwind: "$state.feedback" },
+  {
+    $group: {
+      _id: null,
+      total_feedbacks: { $sum: 1 },
+      media_informacoes_pet: {
+        $avg: {
+          $cond: [
+            { $gt: ["$state.feedback.veterinarySatisfaction", 0] },
+            "$state.feedback.veterinarySatisfaction",
+            null
+          ]
+        }
+      },
+      media_app: {
+        $avg: {
+          $cond: [
+            { $gt: ["$state.feedback.appRating", 0] },
+            "$state.feedback.appRating",
+            null
+          ]
+        }
+      }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      total_feedbacks: 1,
+      media_informacoes_pet: { $round: ["$media_informacoes_pet", 2] },
+      media_app: { $round: ["$media_app", 2] }
+    }
+  }
+]);
+
+Interpretação:
+  media_informacoes_pet = média das estrelas da carteira/informações do pet
+  media_app = média das estrelas da avaliação geral do app
+
+
+3) Média das estrelas por pergunta
+-----------------------------------
+
+As respostas das perguntas foram salvas como texto JSON. A consulta abaixo
+converte esse texto para objeto e calcula a média de cada pergunta.
+
+db.wallet_states.aggregate([
+  { $unwind: "$state.feedback" },
+  {
+    $project: {
+      melhorias: {
+        $function: {
+          body: "function(texto) { try { return JSON.parse(texto || '{}'); } catch (erro) { return {}; } }",
+          args: ["$state.feedback.improvements"],
+          lang: "js"
+        }
+      },
+      sugestoes: {
+        $function: {
+          body: "function(texto) { try { return JSON.parse(texto || '{}'); } catch (erro) { return {}; } }",
+          args: ["$state.feedback.suggestions"],
+          lang: "js"
+        }
+      }
+    }
+  },
+  {
+    $project: {
+      respostas: {
+        $concatArrays: [
+          {
+            $map: {
+              input: { $objectToArray: "$melhorias.ratings" },
+              as: "resposta",
+              in: {
+                secao: "O que pode ficar melhor?",
+                pergunta: "$$resposta.k",
+                nota: "$$resposta.v"
+              }
+            }
+          },
+          {
+            $map: {
+              input: { $objectToArray: "$sugestoes.ratings" },
+              as: "resposta",
+              in: {
+                secao: "Sugestões e melhorias",
+                pergunta: "$$resposta.k",
+                nota: "$$resposta.v"
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  { $unwind: "$respostas" },
+  { $match: { "respostas.nota": { $gte: 1, $lte: 5 } } },
+  {
+    $group: {
+      _id: {
+        secao: "$respostas.secao",
+        pergunta: "$respostas.pergunta"
+      },
+      total_respostas: { $sum: 1 },
+      media: { $avg: "$respostas.nota" }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      secao: "$_id.secao",
+      pergunta: "$_id.pergunta",
+      total_respostas: 1,
+      media: { $round: ["$media", 2] }
+    }
+  },
+  { $sort: { secao: 1, pergunta: 1 } }
+]);
+
+
+4) Ver as perguntas e os textos escritos pelos usuários
+---------------------------------------------------------
+
+db.wallet_states.aggregate([
+  { $unwind: "$state.feedback" },
+  {
+    $project: {
+      data_envio: "$state.feedback.submittedAt",
+      melhorias: {
+        $function: {
+          body: "function(texto) { try { return JSON.parse(texto || '{}'); } catch (erro) { return {}; } }",
+          args: ["$state.feedback.improvements"],
+          lang: "js"
+        }
+      },
+      sugestoes: {
+        $function: {
+          body: "function(texto) { try { return JSON.parse(texto || '{}'); } catch (erro) { return {}; } }",
+          args: ["$state.feedback.suggestions"],
+          lang: "js"
+        }
+      }
+    }
+  },
+  {
+    $project: {
+      data_envio: 1,
+      respostas: {
+        $concatArrays: [
+          {
+            $map: {
+              input: { $objectToArray: "$melhorias.comments" },
+              as: "resposta",
+              in: {
+                secao: "O que pode ficar melhor?",
+                pergunta: "$$resposta.k",
+                texto: "$$resposta.v"
+              }
+            }
+          },
+          {
+            $map: {
+              input: { $objectToArray: "$sugestoes.comments" },
+              as: "resposta",
+              in: {
+                secao: "Sugestões e melhorias",
+                pergunta: "$$resposta.k",
+                texto: "$$resposta.v"
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  { $unwind: "$respostas" },
+  { $match: { "respostas.texto": { $nin: ["", null] } } },
+  {
+    $project: {
+      _id: 0,
+      data_envio: 1,
+      secao: "$respostas.secao",
+      pergunta: "$respostas.pergunta",
+      texto: "$respostas.texto"
+    }
+  },
+  { $sort: { data_envio: -1 } }
+]);
+
+
+5) Contar quantas pessoas deram cada nota para as duas estrelas
+----------------------------------------------------------------
+
+db.wallet_states.aggregate([
+  { $unwind: "$state.feedback" },
+  {
+    $project: {
+      notas: [
+        { tipo: "Informações do pet", nota: "$state.feedback.veterinarySatisfaction" },
+        { tipo: "Avaliação do app", nota: "$state.feedback.appRating" }
+      ]
+    }
+  },
+  { $unwind: "$notas" },
+  { $match: { "notas.nota": { $gte: 1, $lte: 5 } } },
+  {
+    $group: {
+      _id: {
+        tipo: "$notas.tipo",
+        nota: "$notas.nota"
+      },
+      quantidade: { $sum: 1 }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      tipo: "$_id.tipo",
+      nota: "$_id.nota",
+      quantidade: 1
+    }
+  },
+  { $sort: { tipo: 1, nota: 1 } }
+]);
+
+
+Observação sobre o caractere "p":
+  O p selecionado na linha 22 de backend/database.js não é uma consulta
+  MongoDB. Se ele estiver realmente sozinho em uma linha, apague-o e salve
+  o arquivo. A linha 22 correta é a mensagem que começa com:
+  "O MongoDB recusou usuario ou senha..."
+
+  Se aparecer essa mensagem de autenticação, confira:
+  - MONGODB_URI;
+  - usuário e senha do MongoDB Atlas;
+  - caracteres especiais da senha codificados na URI;
+  - IP liberado no Network Access do MongoDB Atlas.
