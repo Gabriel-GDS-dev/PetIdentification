@@ -128,7 +128,17 @@ async function handleApi(request, response, url) {
   }
   if (request.method === "GET" && url.pathname === "/api/admin/analytics") {
     requireAnalyticsAdmin(request);
-    return sendJson(response, 200, await getAnalyticsDashboard());
+    try {
+      return sendJson(response, 200, await getAnalyticsDashboard());
+    } catch (error) {
+      console.error("Falha ao carregar analytics administrativo:", {
+        name: error?.name,
+        code: error?.code,
+        message: error?.message,
+        stack: error?.stack
+      });
+      throw httpError(503, "Nao foi possivel consultar o analytics no MongoDB. Verifique os logs do Render.");
+    }
   }
   if (request.method === "GET" && url.pathname === "/api/state") {
     const user = await requireUser(request); return sendJson(response, 200, { user: publicUser(user), state: await getStoredState(user), syncedAt: new Date().toISOString() });
