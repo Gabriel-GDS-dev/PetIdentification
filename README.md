@@ -158,10 +158,11 @@ Configuração recomendada:
 Root Directory: .
 Build Command: npm install; npm run build
 Start Command: npm start
-Health Check Path: /api/health
+Health Check Path: /api/live
 ```
 
 O `npm start` executa `node backend/server.js`. O servidor já usa `process.env.PORT` e escuta em `0.0.0.0`, que é o formato esperado para Web Services no Render.
+Use `/api/health` para validar manualmente a conexão com o MongoDB depois do deploy.
 
 Em **Environment**, adicione:
 

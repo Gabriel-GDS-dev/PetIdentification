@@ -92,6 +92,9 @@ async function handleRequest(request, response) {
   return serveStatic(url, response, request.method === "HEAD");
 }
 async function handleApi(request, response, url) {
+  if (request.method === "GET" && url.pathname === "/api/live") {
+    return sendJson(response, 200, { ok: true, service: "pet-identification", checkedAt: new Date().toISOString() });
+  }
   if (request.method === "GET" && url.pathname === "/api/health") {
     await pool.database.command({ ping: 1 });
     const users = await pool.database.collection("users").countDocuments();
