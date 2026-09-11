@@ -51,7 +51,6 @@ let pool;
 let poolPromise;
 
 async function main() {
-  assertSessionSecret();
   const server = http.createServer((request, response) => {
     handleRequest(request, response).catch((error) => {
       if (error.statusCode) return sendJson(response, error.statusCode, { error: error.message });
@@ -104,6 +103,7 @@ async function handleApi(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/live") {
     return sendJson(response, 200, { ok: true, service: "pet-identification", checkedAt: new Date().toISOString() });
   }
+  assertSessionSecret();
   await initializePool();
   if (request.method === "GET" && url.pathname === "/api/health") {
     await pool.database.command({ ping: 1 });
