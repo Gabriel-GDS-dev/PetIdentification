@@ -14,13 +14,14 @@ if (!IS_LOCAL_HOST) {
 const STORAGE_KEY = "pet-id-wallet-state-v1";
 const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v4";
 const APP_NAME = "Registro Digital Animal";
-const APP_VERSION = "38";
+const APP_VERSION = "39";
 const APP_CACHE_NAME = `registro-digital-animal-v${APP_VERSION}`;
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
 const API_REQUEST_TIMEOUT_MS = 25000;
 const SYNC_REQUEST_TIMEOUT_MS = 35000;
-const SYNC_PAYLOAD_SOFT_LIMIT_BYTES = 4 * 1024 * 1024;
+const SYNC_PAYLOAD_TARGET_BYTES = 3 * 1024 * 1024;
+const SYNC_CHUNK_MAX_BYTES = 2 * 1024 * 1024;
 const DOCUMENT_FILE_MAX_BYTES = 900 * 1024;
 const WALLET_TEMPLATE_IMAGES = {
   front: "../tcc_screenshots_mobile/Frente.png",
@@ -769,13 +770,20 @@ async function syncWithServer(reason = "auto", options = {}) {
         : await pushStateToServer();
     }
 
-    applyServerSession(payload, { keepToken: true });
-    if (reason === "startup") state.currentView = "home";
+    if (reason === "startup") {
+      applyServerSession(payload, { keepToken: true });
+      state.currentView = "home";
+      await hydrateStoredAttachments();
+    } else {
+      applySyncAck(payload);
+    }
     state.sync = {
       status: "synced",
-      lastSyncedAt: payload.syncedAt || new Date().toISOString(),
+      lastSyncedAt: payload?.syncedAt || new Date().toISOString(),
       lastError: "",
-      apiOnline: true
+      apiOnline: true,
+      payloadSize: state.sync?.payloadSize || previousSync.payloadSize || 0,
+      chunkCount: payload?.chunkCount || state.sync?.chunkCount || 0
     };
     saveState({ sync: false });
     if (!options.silent && reason === "manual") notify("Dados sincronizados com o MongoDB.");
@@ -799,21 +807,19 @@ async function syncWithServer(reason = "auto", options = {}) {
   }
 }
 
-function pushStateToServer() {
+async function pushStateToServer() {
+  await uploadPendingDocumentAttachments();
   const body = {
     state: stateForServer(),
-    clientUpdatedAt: new Date().toISOString()
+    clientUpdatedAt: new Date().toISOString(),
+    returnState: false
   };
   const serializedBody = JSON.stringify(body);
   const bodyBytes = textByteSize(serializedBody);
   state.sync = { ...defaultState.sync, ...(state.sync || {}), payloadSize: bodyBytes };
 
-  if (bodyBytes > SYNC_PAYLOAD_SOFT_LIMIT_BYTES) {
-    const error = new Error(`O pacote de sincronizacao tem ${formatFileSize(bodyBytes)}. A Vercel aceita ate 4,5 MB por chamada da API; remova arquivos grandes ou use anexos menores antes de sincronizar.`);
-    error.status = 413;
-    error.isLocalSyncLimit = true;
-    error.payloadSize = bodyBytes;
-    throw error;
+  if (bodyBytes > SYNC_PAYLOAD_TARGET_BYTES) {
+    return pushSerializedStateToServerInChunks(serializedBody, bodyBytes);
   }
 
   return apiRequest("/api/sync", {
@@ -823,6 +829,160 @@ function pushStateToServer() {
     serializedBody,
     timeoutMs: SYNC_REQUEST_TIMEOUT_MS
   });
+}
+
+async function pushSerializedStateToServerInChunks(serializedBody, bodyBytes) {
+  const chunks = splitTextIntoByteChunks(serializedBody, SYNC_CHUNK_MAX_BYTES);
+  const syncId = createId("sync");
+  let payload = null;
+
+  state.sync = {
+    ...defaultState.sync,
+    ...(state.sync || {}),
+    payloadSize: bodyBytes,
+    chunkCount: chunks.length
+  };
+
+  for (let index = 0; index < chunks.length; index += 1) {
+    payload = await apiRequest("/api/sync/chunk", {
+      method: "POST",
+      auth: true,
+      body: {
+        syncId,
+        index,
+        total: chunks.length,
+        bodyBytes,
+        data: chunks[index]
+      },
+      timeoutMs: SYNC_REQUEST_TIMEOUT_MS
+    });
+  }
+
+  return {
+    ...(payload || {}),
+    payloadSize: bodyBytes,
+    chunkCount: chunks.length
+  };
+}
+
+function splitTextIntoByteChunks(text, maxBytes) {
+  const chunks = [];
+  let start = 0;
+
+  while (start < text.length) {
+    let low = start + 1;
+    let high = Math.min(text.length, start + maxBytes);
+    let best = low;
+
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      const size = textByteSize(text.slice(start, middle));
+      if (size <= maxBytes) {
+        best = middle;
+        low = middle + 1;
+      } else {
+        high = middle - 1;
+      }
+    }
+
+    chunks.push(text.slice(start, best));
+    start = best;
+  }
+
+  return chunks.length ? chunks : [""];
+}
+
+async function uploadPendingDocumentAttachments() {
+  if (!Array.isArray(state.documents) || !state.auth?.apiToken) return;
+
+  let changed = false;
+  for (const doc of state.documents) {
+    const attachment = normalizeDocumentAttachment(doc.attachment);
+    if (!attachment?.dataUrl) continue;
+
+    const syncKey = documentAttachmentUploadKey(attachment);
+    if (attachment.storageId && attachment.syncKey === syncKey) continue;
+
+    const payload = await apiRequest("/api/attachments", {
+      method: "POST",
+      auth: true,
+      body: {
+        documentId: doc.id,
+        syncKey,
+        attachment
+      },
+      timeoutMs: SYNC_REQUEST_TIMEOUT_MS
+    });
+
+    const storedAttachment = normalizeDocumentAttachment({
+      ...attachment,
+      ...(payload?.attachment || {}),
+      dataUrl: attachment.dataUrl,
+      syncKey
+    });
+
+    if (storedAttachment) {
+      doc.attachment = storedAttachment;
+      changed = true;
+    }
+  }
+
+  if (changed) saveState({ sync: false, notify: false });
+}
+
+function documentAttachmentUploadKey(attachment) {
+  return [
+    attachment.name || "",
+    attachment.type || "",
+    attachment.size || 0,
+    attachment.uploadedAt || "",
+    attachment.dataUrl ? attachment.dataUrl.length : 0
+  ].join("|");
+}
+
+async function hydrateStoredAttachments() {
+  if (!Array.isArray(state.documents) || !state.auth?.apiToken) return;
+
+  let changed = false;
+  for (const doc of state.documents) {
+    const attachment = normalizeDocumentAttachment(doc.attachment);
+    if (!attachment?.storageId || attachment.dataUrl) continue;
+
+    try {
+      const payload = await apiRequest(`/api/attachments/${encodeURIComponent(attachment.storageId)}`, {
+        method: "GET",
+        auth: true,
+        timeoutMs: API_REQUEST_TIMEOUT_MS
+      });
+      const hydratedAttachment = normalizeDocumentAttachment({
+        ...attachment,
+        ...(payload?.attachment || {})
+      });
+      if (hydratedAttachment?.dataUrl) {
+        doc.attachment = hydratedAttachment;
+        changed = true;
+      }
+    } catch (error) {
+      console.warn("Nao foi possivel baixar anexo sincronizado.", error);
+    }
+  }
+
+  if (changed) saveState({ sync: false, notify: false });
+}
+
+function applySyncAck(payload = {}) {
+  const apiUser = payload?.user;
+  if (!apiUser?.email) return;
+
+  const current = currentUser();
+  state.users = upsertLocalUser(state.users, apiUser, current?.password || "");
+  state.auth = {
+    ...defaultState.auth,
+    ...(state.auth || {}),
+    currentUserEmail: apiUser.email,
+    authView: "login",
+    trustedDevice: true
+  };
 }
 
 function getStateFromServer() {
@@ -1033,7 +1193,28 @@ function stateForServer() {
     const { password, ...safeUser } = user;
     return safeUser;
   });
+  snapshot.documents = (Array.isArray(snapshot.documents) ? snapshot.documents : []).map((doc) => ({
+    ...doc,
+    attachment: documentAttachmentForServer(doc.attachment)
+  }));
   return snapshot;
+}
+
+function documentAttachmentForServer(attachment) {
+  const normalized = normalizeDocumentAttachment(attachment);
+  if (!normalized) return null;
+
+  return {
+    name: normalized.name,
+    type: normalized.type,
+    originalType: normalized.originalType,
+    size: normalized.size,
+    storageId: normalized.storageId,
+    url: normalized.url,
+    uploadedAt: normalized.uploadedAt,
+    storedAt: normalized.storedAt,
+    hasData: Boolean(normalized.hasData || normalized.storageId || normalized.url || normalized.dataUrl)
+  };
 }
 
 function render() {
@@ -1649,9 +1830,9 @@ function walletDocumentTile(doc) {
   const attachment = documentAttachment(doc);
   return `
     <div class="wallet-document-tile ${attachment ? "has-attachment" : ""}">
-      <div class="wallet-document-preview ${attachment && isImageAttachment(attachment) ? "image" : "file"}">
+      <div class="wallet-document-preview ${attachment && attachment.dataUrl && isImageAttachment(attachment) ? "image" : "file"}">
         ${
-          attachment && isImageAttachment(attachment)
+          attachment && attachment.dataUrl && isImageAttachment(attachment)
             ? `<img src="${escapeHTML(attachment.dataUrl)}" alt="Documento ${escapeHTML(doc.title)}" />`
             : `<span>${attachment ? documentFileKind(attachment) : "DOC"}</span>`
         }
@@ -2548,6 +2729,7 @@ function syncCard() {
         ${detailRow("Servidor", sync.apiOnline ? "Conectado" : "Aguardando conexão")}
         ${detailRow("Última sincronização", sync.lastSyncedAt ? formatDateTime(sync.lastSyncedAt) : "Ainda não sincronizado")}
         ${sync.payloadSize ? detailRow("Tamanho do envio", formatFileSize(sync.payloadSize)) : ""}
+        ${sync.chunkCount > 1 ? detailRow("Lotes enviados", sync.chunkCount) : ""}
         ${sync.lastError ? detailRow("Aviso", sync.lastError) : ""}
       </div>
       <div class="button-row" style="margin-top: 14px;">
@@ -2689,14 +2871,16 @@ function documentItem(doc) {
 
 function documentAttachment(doc) {
   const attachment = doc?.attachment && typeof doc.attachment === "object" ? doc.attachment : null;
-  if (!attachment?.dataUrl) return null;
   return normalizeDocumentAttachment(attachment);
 }
 
 function normalizeDocumentAttachment(attachment) {
   const source = attachment && typeof attachment === "object" ? attachment : {};
   const dataUrl = safeDocumentDataUrl(source.dataUrl);
-  if (!dataUrl) return null;
+  const storageId = String(source.storageId || "").trim();
+  const url = safeAttachmentUrl(source.url);
+  const hasData = Boolean(dataUrl || storageId || url || source.hasData);
+  if (!hasData) return null;
 
   return {
     name: String(source.name || "documento").trim() || "documento",
@@ -2704,7 +2888,12 @@ function normalizeDocumentAttachment(attachment) {
     originalType: String(source.originalType || "").trim(),
     size: Number(source.size || 0),
     dataUrl,
-    uploadedAt: source.uploadedAt || ""
+    storageId,
+    url,
+    uploadedAt: source.uploadedAt || "",
+    storedAt: source.storedAt || "",
+    syncKey: String(source.syncKey || "").trim(),
+    hasData
   };
 }
 
@@ -2733,9 +2922,10 @@ function documentUploadPreview(attachment) {
 
 function documentAttachmentPreview(attachment, mode = "card") {
   const isImage = isImageAttachment(attachment);
+  const hasImagePreview = Boolean(isImage && attachment.dataUrl);
   return `
-    <div class="document-attachment-preview ${isImage ? "image" : "file"} ${mode}" data-document-attachment-preview>
-      ${isImage ? `<img src="${escapeHTML(attachment.dataUrl)}" alt="Documento anexado" />` : `<span>${documentFileKind(attachment)}</span>`}
+    <div class="document-attachment-preview ${hasImagePreview ? "image" : "file"} ${mode}" data-document-attachment-preview>
+      ${hasImagePreview ? `<img src="${escapeHTML(attachment.dataUrl)}" alt="Documento anexado" />` : `<span>${documentFileKind(attachment)}</span>`}
       <strong>${escapeHTML(attachment.name)}</strong>
     </div>
   `;
@@ -2748,7 +2938,7 @@ function documentFileKind(attachment) {
 }
 
 function isImageAttachment(attachment) {
-  return Boolean(attachment?.dataUrl?.startsWith("data:image/"));
+  return Boolean(attachment?.dataUrl?.startsWith("data:image/") || String(attachment?.type || "").startsWith("image/"));
 }
 
 function clinicCard(clinic) {
@@ -3373,6 +3563,7 @@ async function login(data) {
       body: { email, password }
     });
     applyServerSession(payload, { password });
+    await hydrateStoredAttachments();
     saveState({ sync: false });
     notify("Login realizado com banco conectado.");
     render();
@@ -4021,7 +4212,7 @@ async function drawWalletDocumentTile(context, doc, x, y, width, height) {
   drawRoundedRect(context, x, y, width, height, 16, "rgba(255, 255, 255, 0.82)");
   drawRoundedRect(context, x + 16, y + 18, 188, height - 36, 12, "#d8eee1");
 
-  if (attachment && isImageAttachment(attachment)) {
+  if (attachment && attachment.dataUrl && isImageAttachment(attachment)) {
     await drawDataImageClipped(context, attachment.dataUrl, x + 16, y + 18, 188, height - 36, 12, true);
   } else {
     drawGrid(context, x + 16, y + 18, 188, height - 36, "#e8f6ee");
@@ -4763,6 +4954,12 @@ function safeExternalUrl(value = "") {
   } catch {
     return "";
   }
+}
+
+function safeAttachmentUrl(value = "") {
+  const text = String(value || "").trim();
+  if (text.startsWith("/api/attachments/")) return text;
+  return safeExternalUrl(text);
 }
 
 function slugify(value = "") {

@@ -197,7 +197,7 @@ Se `/api/login` ou `/api/register` retornar `500`, confira em **Settings > Envir
 
 Após alterar qualquer variável, faça **Redeploy**. Consulte **Deployments > Functions > Logs** para confirmar a causa. Não use a URI do MongoDB em código, GitHub, `.env` versionado ou mensagens públicas.
 
-Se o app mostrar **Dados grandes demais para sincronizar**, o MongoDB pode estar conectado corretamente. Esse aviso acontece quando fotos, PDFs ou scans deixam o JSON acima do limite de payload da Function na Vercel. Remova anexos grandes, reenvie imagens menores ou mova anexos para um storage separado antes de sincronizar.
+Se o app mostrar **Dados grandes demais para sincronizar**, o MongoDB pode estar conectado corretamente. O app envia anexos para a coleção `wallet_attachments`, salva no estado apenas metadados/URL e divide sincronizações grandes em lotes por `/api/sync/chunk`. Depois de publicar uma versão nova, abra o app e toque em **Limpar cache** se o PWA ainda estiver usando um JavaScript antigo.
 
 ### 3. Validar após o deploy
 

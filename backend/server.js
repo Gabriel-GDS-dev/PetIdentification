@@ -9,6 +9,8 @@ const PORT = Number(process.env.PORT || 5241);
 const HOST = process.env.HOST || "0.0.0.0";
 const SESSION_SECRET = process.env.SESSION_SECRET || (process.env.VERCEL ? "" : "pet-identification-dev-secret");
 const MAX_JSON_BYTES = 4 * 1024 * 1024;
+const SYNC_CHUNK_MAX_COUNT = 80;
+const SYNC_CHUNK_MAX_AGE_MS = 60 * 60 * 1000;
 const EXTERNAL_REQUEST_TIMEOUT_MS = 22000;
 const OVERPASS_REQUEST_TIMEOUT_MS = 12000;
 const OVERPASS_API_URL = process.env.OVERPASS_API_URL || "https://overpass-api.de/api/interpreter";
@@ -108,9 +110,26 @@ async function handleApi(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/state") {
     const user = await requireUser(request); return sendJson(response, 200, { user: publicUser(user), state: await getStoredState(user), syncedAt: new Date().toISOString() });
   }
+  if (request.method === "POST" && url.pathname === "/api/attachments") {
+    const user = await requireUser(request); const attachment = await saveAttachment(user, await readJson(request));
+    return sendJson(response, 200, { user: publicUser(user), attachment, syncedAt: new Date().toISOString() });
+  }
+  {
+    const attachmentMatch = url.pathname.match(/^\/api\/attachments\/([^/]+)$/);
+    if (request.method === "GET" && attachmentMatch) {
+      const user = await requireUser(request); const attachment = await getAttachment(user, decodeURIComponent(attachmentMatch[1]));
+      return sendJson(response, 200, { user: publicUser(user), attachment, syncedAt: new Date().toISOString() });
+    }
+  }
+  if (request.method === "POST" && url.pathname === "/api/sync/chunk") {
+    const user = await requireUser(request); const payload = await saveSyncChunk(user, await readJson(request));
+    return sendJson(response, 200, payload);
+  }
   if (request.method === "POST" && url.pathname === "/api/sync") {
     const user = await requireUser(request); const body = await readJson(request); const state = await saveWalletState(user, body.state, body.clientUpdatedAt);
-    return sendJson(response, 200, { user: publicUser(user), state, syncedAt: new Date().toISOString() });
+    const payload = { user: publicUser(user), syncedAt: new Date().toISOString() };
+    if (body.returnState !== false) payload.state = state;
+    return sendJson(response, 200, payload);
   }
   return sendJson(response, 404, { error: "Rota da API nao encontrada." });
 }
@@ -317,11 +336,234 @@ async function findUserById(id) {
 
 async function getStoredState(user) {
   const stored = await pool.database.collection("wallet_states").findOne({ user_id: user.id });
-  return stored ? stateForClient(stored.state, user) : null;
+  if (!stored) return null;
+
+  const prepared = await detachStateAttachments(user, stored.state);
+  if (prepared.changed) {
+    await pool.database.collection("wallet_states").updateOne(
+      { user_id: user.id },
+      {
+        $set: {
+          state: prepared.state,
+          updated_at: new Date().toISOString()
+        }
+      }
+    );
+  }
+  return stateForClient(prepared.state, user);
+}
+
+async function detachStateAttachments(user, incomingState) {
+  const state = incomingState && typeof incomingState === "object" ? JSON.parse(JSON.stringify(incomingState)) : {};
+  const documents = Array.isArray(state.documents) ? state.documents : [];
+  let changed = false;
+
+  for (const document of documents) {
+    if (!document || typeof document !== "object") continue;
+    const attachment = document.attachment && typeof document.attachment === "object" ? document.attachment : null;
+    if (!attachment) continue;
+
+    if (safeAttachmentDataUrl(attachment.dataUrl)) {
+      document.attachment = await saveAttachment(user, { documentId: document.id, attachment });
+      changed = true;
+      continue;
+    }
+
+    const stripped = attachmentMetadataForState(attachment);
+    if (stripped && JSON.stringify(stripped) !== JSON.stringify(attachment)) {
+      document.attachment = stripped;
+      changed = true;
+    }
+  }
+
+  return { state, changed };
+}
+
+function attachmentMetadataForState(source = {}) {
+  const storageId = cleanText(source.storageId);
+  const url = storageId ? `/api/attachments/${encodeURIComponent(storageId)}` : cleanText(source.url);
+  const hasData = Boolean(storageId || url || source.hasData);
+  const name = cleanText(source.name);
+  const type = cleanText(source.type);
+  if (!hasData && !name && !type) return null;
+
+  return {
+    name: name || "documento",
+    type,
+    originalType: cleanText(source.originalType),
+    size: Math.max(0, Math.round(Number(source.size) || 0)),
+    storageId,
+    url,
+    uploadedAt: coerceTimestamp(source.uploadedAt) || "",
+    storedAt: coerceTimestamp(source.storedAt) || "",
+    hasData
+  };
+}
+
+async function saveAttachment(user, body) {
+  const source = body?.attachment && typeof body.attachment === "object" ? body.attachment : {};
+  const attachment = normalizeUploadedAttachment(source);
+  if (!attachment.dataUrl) throw httpError(400, "Anexo invalido ou vazio.");
+
+  const id = cleanText(source.storageId || body.storageId) || crypto.randomUUID();
+  const now = new Date().toISOString();
+  const record = {
+    user_id: user.id,
+    id,
+    document_id: cleanText(body.documentId || source.documentId),
+    name: attachment.name,
+    type: attachment.type,
+    original_type: attachment.originalType,
+    size: attachment.size,
+    data_url: attachment.dataUrl,
+    uploaded_at: attachment.uploadedAt,
+    stored_at: now,
+    updated_at: now
+  };
+
+  await pool.database.collection("wallet_attachments").replaceOne(
+    { user_id: user.id, id },
+    record,
+    { upsert: true }
+  );
+
+  return attachmentForClient(record);
+}
+
+async function getAttachment(user, id) {
+  const storageId = cleanText(id);
+  if (!storageId) throw httpError(400, "Anexo nao informado.");
+
+  const record = await pool.database.collection("wallet_attachments").findOne({ user_id: user.id, id: storageId });
+  if (!record) throw httpError(404, "Anexo nao encontrado.");
+  return attachmentForClient(record, true);
+}
+
+async function saveSyncChunk(user, body) {
+  const syncId = cleanText(body.syncId).slice(0, 160);
+  const index = Number(body.index);
+  const total = Number(body.total);
+  const data = typeof body.data === "string" ? body.data : "";
+
+  if (!syncId) throw httpError(400, "Identificador da sincronizacao nao informado.");
+  if (!Number.isInteger(index) || index < 0) throw httpError(400, "Indice do lote invalido.");
+  if (!Number.isInteger(total) || total < 1 || total > SYNC_CHUNK_MAX_COUNT) throw httpError(400, "Quantidade de lotes invalida.");
+  if (index >= total) throw httpError(400, "Indice do lote fora da sequencia.");
+  if (!data) throw httpError(400, "Lote vazio.");
+
+  const chunks = pool.database.collection("sync_chunks");
+  await chunks.deleteMany({
+    user_id: user.id,
+    updated_at: { $lt: new Date(Date.now() - SYNC_CHUNK_MAX_AGE_MS) }
+  });
+  await chunks.updateOne(
+    { user_id: user.id, sync_id: syncId, index },
+    {
+      $set: {
+        user_id: user.id,
+        sync_id: syncId,
+        index,
+        total,
+        body_bytes: Number(body.bodyBytes) || 0,
+        data,
+        updated_at: new Date()
+      }
+    },
+    { upsert: true }
+  );
+
+  const receivedChunks = await chunks.find({ user_id: user.id, sync_id: syncId }).sort({ index: 1 }).toArray();
+  if (receivedChunks.length < total) {
+    return {
+      user: publicUser(user),
+      complete: false,
+      chunksReceived: receivedChunks.length,
+      totalChunks: total,
+      chunkCount: total,
+      syncedAt: new Date().toISOString()
+    };
+  }
+
+  const byIndex = new Map(receivedChunks.map((chunk) => [chunk.index, chunk]));
+  const ordered = [];
+  for (let current = 0; current < total; current += 1) {
+    const chunk = byIndex.get(current);
+    if (!chunk) {
+      return {
+        user: publicUser(user),
+        complete: false,
+        chunksReceived: receivedChunks.length,
+        totalChunks: total,
+        chunkCount: total,
+        syncedAt: new Date().toISOString()
+      };
+    }
+    ordered.push(chunk.data);
+  }
+
+  let mergedBody;
+  try {
+    mergedBody = JSON.parse(ordered.join(""));
+  } catch {
+    await chunks.deleteMany({ user_id: user.id, sync_id: syncId });
+    throw httpError(400, "Lotes de sincronizacao invalidos.");
+  }
+
+  await saveWalletState(user, mergedBody.state, mergedBody.clientUpdatedAt);
+  await chunks.deleteMany({ user_id: user.id, sync_id: syncId });
+
+  return {
+    user: publicUser(user),
+    complete: true,
+    chunksReceived: total,
+    totalChunks: total,
+    chunkCount: total,
+    payloadSize: Number(body.bodyBytes) || 0,
+    syncedAt: new Date().toISOString()
+  };
+}
+
+function normalizeUploadedAttachment(source = {}) {
+  const dataUrl = safeAttachmentDataUrl(source.dataUrl);
+  const mimeFromData = dataUrl.match(/^data:([^;,]+);base64,/i)?.[1] || "";
+  const type = cleanText(source.type || mimeFromData).slice(0, 120);
+
+  return {
+    name: (cleanText(source.name).slice(0, 240) || "documento"),
+    type,
+    originalType: cleanText(source.originalType).slice(0, 120),
+    size: Math.max(0, Math.round(Number(source.size) || Buffer.byteLength(dataUrl, "utf8"))),
+    dataUrl,
+    uploadedAt: coerceTimestamp(source.uploadedAt) || new Date().toISOString()
+  };
+}
+
+function attachmentForClient(record, includeDataUrl = false) {
+  const attachment = {
+    name: cleanText(record.name) || "documento",
+    type: cleanText(record.type),
+    originalType: cleanText(record.original_type),
+    size: Math.max(0, Math.round(Number(record.size) || 0)),
+    storageId: cleanText(record.id),
+    url: `/api/attachments/${encodeURIComponent(cleanText(record.id))}`,
+    uploadedAt: coerceTimestamp(record.uploaded_at) || "",
+    storedAt: coerceTimestamp(record.stored_at) || "",
+    hasData: true
+  };
+  if (includeDataUrl) attachment.dataUrl = safeAttachmentDataUrl(record.data_url);
+  return attachment;
+}
+
+function safeAttachmentDataUrl(value = "") {
+  const text = cleanText(value);
+  if (/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(text)) return text;
+  if (/^data:application\/pdf;base64,/i.test(text)) return text;
+  return "";
 }
 
 async function saveWalletState(user, incomingState, clientUpdatedAt) {
-  const state = sanitizeIncomingState(incomingState, user);
+  const prepared = await detachStateAttachments(user, sanitizeIncomingState(incomingState, user));
+  const state = prepared.state;
   await pool.database.collection("wallet_states").replaceOne(
     { user_id: user.id },
     {
