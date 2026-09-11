@@ -643,8 +643,14 @@ async function getAnalyticsDashboard() {
   const weekStart = new Date(todayStart);
   weekStart.setDate(weekStart.getDate() - 6);
   const [uniqueToday, uniqueWeek, eventCounts, users, states, feedbacks] = await Promise.all([
-    events.distinct("user_id", { created_at: { $gte: todayStart } }),
-    events.distinct("user_id", { created_at: { $gte: weekStart } }),
+    events.aggregate([
+      { $match: { created_at: { $gte: todayStart } } },
+      { $group: { _id: "$user_id" } }
+    ]).toArray(),
+    events.aggregate([
+      { $match: { created_at: { $gte: weekStart } } },
+      { $group: { _id: "$user_id" } }
+    ]).toArray(),
     events.aggregate([{ $group: { _id: "$event", total: { $sum: 1 } } }]).toArray(),
     pool.database.collection("users").countDocuments(),
     pool.database.collection("wallet_states").find({}, { projection: { state: 1 } }).toArray(),
