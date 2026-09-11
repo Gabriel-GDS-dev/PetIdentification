@@ -52,7 +52,6 @@ let poolPromise;
 
 async function main() {
   assertSessionSecret();
-  await initializePool();
   const server = http.createServer((request, response) => {
     handleRequest(request, response).catch((error) => {
       if (error.statusCode) return sendJson(response, error.statusCode, { error: error.message });
@@ -62,7 +61,9 @@ async function main() {
   server.listen(PORT, HOST, () => {
     console.log(`Registro Digital Animal rodando no computador: http://127.0.0.1:${PORT}`);
     for (const accessUrl of getNetworkAccessUrls(PORT)) console.log(`Abra no celular conectado ao mesmo Wi-Fi: ${accessUrl}`);
-    console.log(`Banco conectado: MongoDB/${getDatabaseName()}`);
+    initializePool()
+      .then(() => console.log(`Banco conectado: MongoDB/${getDatabaseName()}`))
+      .catch((error) => console.error("Banco indisponivel durante a inicializacao:", publicStartupErrorMessage(error)));
   });
 }
 async function initializePool() {
@@ -103,6 +104,7 @@ async function handleApi(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/live") {
     return sendJson(response, 200, { ok: true, service: "pet-identification", checkedAt: new Date().toISOString() });
   }
+  await initializePool();
   if (request.method === "GET" && url.pathname === "/api/health") {
     await pool.database.command({ ping: 1 });
     const users = await pool.database.collection("users").countDocuments();
