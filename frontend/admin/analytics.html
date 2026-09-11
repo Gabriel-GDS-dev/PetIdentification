@@ -5,19 +5,46 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Analytics privado | Registro Digital Animal</title>
   <style>
-    :root { font-family: system-ui, sans-serif; color: #102a2a; background: #f3faf8; }
-    body { max-width: 980px; margin: 0 auto; padding: 32px 20px; }
-    h1 { margin-bottom: 4px; } .muted { color: #637575; }
-    form, .card { background: white; border: 1px solid #dce8e6; border-radius: 12px; padding: 20px; box-shadow: 0 8px 24px #102a2a12; }
+    :root {
+      color-scheme: light;
+      --bg: #f3faf8;
+      --surface: #ffffff;
+      --ink: #102a2a;
+      --muted: #637575;
+      --line: #dce8e6;
+      --input: #ffffff;
+      --primary: #147a6b;
+      --shadow: #102a2a12;
+      font-family: system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0d1f20;
+      --surface: #13292a;
+      --ink: #edf7f5;
+      --muted: #a9bbbb;
+      --line: #274848;
+      --input: #183536;
+      --primary: #2ac9a7;
+      --shadow: #00000057;
+    }
+    body { max-width: 980px; min-height: 100vh; margin: 0 auto; padding: 32px 20px; background: linear-gradient(135deg, #2ac9a71f, transparent 38%), linear-gradient(320deg, #f0c36b1a, transparent 40%), var(--bg); }
+    h1 { margin-bottom: 4px; } .muted { color: var(--muted); }
+    form, .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; box-shadow: 0 8px 24px var(--shadow); }
     form { display: grid; gap: 12px; max-width: 560px; } label { display: grid; gap: 5px; font-weight: 600; }
-    input, button { font: inherit; padding: 11px 12px; border-radius: 8px; border: 1px solid #b9cfcc; }
-    button { cursor: pointer; color: white; background: #147a6b; border-color: #147a6b; font-weight: 700; }
+    input, button { font: inherit; padding: 11px 12px; border-radius: 8px; border: 1px solid var(--line); }
+    input { color: var(--ink); background: var(--input); }
+    button { cursor: pointer; color: #ffffff; background: var(--primary); border-color: var(--primary); font-weight: 700; }
+    .theme-toggle { margin-bottom: 20px; color: var(--ink); background: var(--surface); border-color: var(--line); }
     .hidden { display: none; } .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 22px; }
-    .card strong { display: block; font-size: 2rem; color: #147a6b; } .card span { color: #637575; }
+    .card strong { display: block; font-size: 2rem; color: var(--primary); } .card span { color: var(--muted); }
     #message { min-height: 1.5em; color: #bd3d46; }
   </style>
 </head>
 <body>
+  <button class="theme-toggle" id="theme-toggle" type="button">Ativar tema escuro</button>
   <h1>Analytics privado</h1>
   <p class="muted">Somente o administrador configurado no ambiente pode consultar estes dados.</p>
   <form id="login">
@@ -32,6 +59,7 @@
   <script>
     const form = document.querySelector("#login"), dashboard = document.querySelector("#dashboard");
     const message = document.querySelector("#message"), cards = document.querySelector("#cards");
+    const themeToggle = document.querySelector("#theme-toggle");
     let credentials = null;
     const labels = { uniqueUsersToday: "Usuários únicos hoje", uniqueUsersWeek: "Usuários únicos na semana", logins: "Total de logins", users: "Contas", pets: "Pets cadastrados", vaccines: "Vacinas cadastradas", documents: "Documentos enviados", feedbacks: "Feedbacks enviados", synchronizations: "Sincronizações", apiErrors: "Erros da API" };
     async function load() {
@@ -45,6 +73,18 @@
     }
     form.addEventListener("submit", async (event) => { event.preventDefault(); credentials = Object.fromEntries(new FormData(form)); try { await load(); } catch (error) { message.textContent = error.message; } });
     document.querySelector("#refresh").addEventListener("click", () => load().catch((error) => { message.textContent = error.message; }));
+    function applyTheme(theme) {
+      document.documentElement.dataset.theme = theme;
+      themeToggle.textContent = theme === "dark" ? "Ativar tema claro" : "Ativar tema escuro";
+      themeToggle.setAttribute("aria-pressed", String(theme === "dark"));
+    }
+    const savedTheme = localStorage.getItem("analytics-theme");
+    applyTheme(savedTheme === "dark" ? "dark" : "light");
+    themeToggle.addEventListener("click", () => {
+      const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+      localStorage.setItem("analytics-theme", nextTheme);
+      applyTheme(nextTheme);
+    });
   </script>
 </body>
 </html>
