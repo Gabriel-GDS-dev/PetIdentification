@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Analytics privado | Registro Digital Animal</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; color: #102a2a; background: #f3faf8; }
+    body { max-width: 980px; margin: 0 auto; padding: 32px 20px; }
+    h1 { margin-bottom: 4px; } .muted { color: #637575; }
+    form, .card { background: white; border: 1px solid #dce8e6; border-radius: 12px; padding: 20px; box-shadow: 0 8px 24px #102a2a12; }
+    form { display: grid; gap: 12px; max-width: 560px; } label { display: grid; gap: 5px; font-weight: 600; }
+    input, button { font: inherit; padding: 11px 12px; border-radius: 8px; border: 1px solid #b9cfcc; }
+    button { cursor: pointer; color: white; background: #147a6b; border-color: #147a6b; font-weight: 700; }
+    .hidden { display: none; } .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 22px; }
+    .card strong { display: block; font-size: 2rem; color: #147a6b; } .card span { color: #637575; }
+    #message { min-height: 1.5em; color: #bd3d46; }
+  </style>
+</head>
+<body>
+  <h1>Analytics privado</h1>
+  <p class="muted">Somente o administrador configurado no ambiente pode consultar estes dados.</p>
+  <form id="login">
+    <label>E-mail de administrador<input name="email" type="email" autocomplete="username" required></label>
+    <label>Token secreto<input name="token" type="password" autocomplete="current-password" required></label>
+    <button>Consultar painel</button><div id="message" role="alert"></div>
+  </form>
+  <section id="dashboard" class="hidden">
+    <p class="muted" id="updated"></p><div id="cards" class="grid"></div>
+    <button id="refresh" type="button">Atualizar</button>
+  </section>
+  <script>
+    const form = document.querySelector("#login"), dashboard = document.querySelector("#dashboard");
+    const message = document.querySelector("#message"), cards = document.querySelector("#cards");
+    let credentials = null;
+    const labels = { uniqueUsersToday: "Usuários únicos hoje", uniqueUsersWeek: "Usuários únicos na semana", logins: "Total de logins", users: "Contas", pets: "Pets cadastrados", vaccines: "Vacinas cadastradas", documents: "Documentos enviados", feedbacks: "Feedbacks enviados", synchronizations: "Sincronizações", apiErrors: "Erros da API" };
+    async function load() {
+      message.textContent = "";
+      const response = await fetch("/api/admin/analytics", { headers: { "X-Analytics-Admin-Token": credentials.token, "X-Admin-Email": credentials.email } });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Não foi possível carregar o painel.");
+      document.querySelector("#updated").textContent = `Atualizado em ${new Date(payload.generatedAt).toLocaleString("pt-BR")}`;
+      cards.innerHTML = Object.entries(labels).map(([key, label]) => `<div class="card"><strong>${Number(payload[key] || 0).toLocaleString("pt-BR")}</strong><span>${label}</span></div>`).join("");
+      form.classList.add("hidden"); dashboard.classList.remove("hidden");
+    }
+    form.addEventListener("submit", async (event) => { event.preventDefault(); credentials = Object.fromEntries(new FormData(form)); try { await load(); } catch (error) { message.textContent = error.message; } });
+    document.querySelector("#refresh").addEventListener("click", () => load().catch((error) => { message.textContent = error.message; }));
+  </script>
+</body>
+</html>

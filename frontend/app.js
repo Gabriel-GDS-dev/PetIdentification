@@ -772,10 +772,12 @@ async function syncWithServer(reason = "auto", options = {}) {
 
     if (reason === "startup") {
       applyServerSession(payload, { keepToken: true });
+      trackAnalytics("ABRIU_APP");
       state.currentView = "home";
       await hydrateStoredAttachments();
     } else {
       applySyncAck(payload);
+      trackAnalytics("SINCRONIZOU_DADOS", { reason });
     }
     state.sync = {
       status: "synced",
@@ -799,6 +801,7 @@ async function syncWithServer(reason = "auto", options = {}) {
       apiOnline: isPayloadError ? true : false
     };
     if (isSessionError) state.auth = { ...state.auth, apiToken: "" };
+    if (!isSessionError && !isPayloadError) trackAnalytics("API_ERROR", { status: error.status || 0 });
     saveState({ sync: false });
     if (!options.silent && reason === "manual") notify(syncNotifyMessage(error, isSessionError, isPayloadError));
     if (!options.silent) render();
@@ -1108,6 +1111,15 @@ async function apiRequest(path, options = {}) {
   return payload;
 }
 
+function trackAnalytics(event, metadata = {}) {
+  if (!state.auth?.apiToken) return;
+  apiRequest("/api/analytics/event", {
+    method: "POST",
+    auth: true,
+    body: { event, metadata }
+  }).catch((error) => console.warn("Analytics indisponivel:", error.message));
+}
+
 function applyServerSession(payload, options = {}) {
   const apiUser = payload?.user;
   if (!apiUser?.email) return;
@@ -1356,6 +1368,7 @@ function screenTemplate() {
 
 function navigate(view) {
   if (view === "wallet" && state.currentView !== "wallet") walletSlideIndex = 0;
+  if (view === "wallet") trackAnalytics("VISUALIZOU_CARTEIRA");
   state.currentView = view;
   saveState();
   closeModal();
@@ -3836,6 +3849,7 @@ async function handleForm(form) {
     else state.pets.push(pet);
     state.selectedPetId = pet.id;
     notify("Pet salvo na carteira.");
+    trackAnalytics("CADASTRO_PET", { action: existing >= 0 ? "edit" : "create", petCount: state.pets.length });
   }
 
   if (type === "owner") {
@@ -3864,6 +3878,7 @@ async function handleForm(form) {
     else state.vaccines.push(nextVaccine);
     state.selectedPetId = data.petId;
     notify(vaccineIndex >= 0 ? "Vacina atualizada." : "Vacina registrada.");
+    trackAnalytics("ADICIONOU_VACINA", { action: vaccineIndex >= 0 ? "edit" : "create" });
   }
 
   if (type === "document") {
@@ -3884,6 +3899,7 @@ async function handleForm(form) {
     else state.documents.push(nextDocument);
     state.selectedPetId = data.petId;
     notify(documentIndex >= 0 ? "Documento atualizado." : "Documento salvo.");
+    trackAnalytics("UPLOAD_DOCUMENTO", { action: documentIndex >= 0 ? "edit" : "create" });
   }
 
   if (type === "travel") {
@@ -3916,6 +3932,7 @@ async function handleForm(form) {
     };
     state.feedback = Array.isArray(state.feedback) ? [...state.feedback, submission] : [submission];
     notify("Avaliação salva com sucesso.");
+    trackAnalytics("FEEDBACK_ENVIADO");
   }
 
   saveState();

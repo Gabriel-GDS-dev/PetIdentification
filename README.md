@@ -164,6 +164,31 @@ Health Check Path: /api/live
 O `npm start` executa `node backend/server.js`. O servidor já usa `process.env.PORT` e escuta em `0.0.0.0`, que é o formato esperado para Web Services no Render.
 Use `/api/health` para validar manualmente a conexão com o MongoDB depois do deploy.
 
+### Analytics privado
+
+O app registra eventos mínimos (sem senha, CPF, endereço ou conteúdo de documentos) na coleção `analytics_events`. O painel real só responde quando os dois valores abaixo conferem:
+
+```text
+ANALYTICS_ADMIN_TOKEN=um-token-aleatorio-com-pelo-menos-32-caracteres
+ADMIN_EMAIL=seu-email@gmail.com
+```
+
+No Render, adicione essas variáveis em **Environment**. Na Vercel, adicione-as em **Settings > Environment Variables** para o ambiente publicado e faça um novo deploy.
+
+Para gerar um token no PowerShell:
+
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+Depois de publicar:
+
+1. Abra `https://seu-dominio/admin/analytics`.
+2. Informe exatamente o `ADMIN_EMAIL` e o `ANALYTICS_ADMIN_TOKEN` configurados no provedor.
+3. Consulte os indicadores e use **Atualizar** para buscar os dados novamente.
+
+O token não deve ser colocado na URL, no GitHub, em screenshots ou no código do frontend. Se as variáveis não estiverem configuradas, o painel permanece sem dados e a API retorna erro de configuração.
+
 Em **Environment**, adicione:
 
 ```text

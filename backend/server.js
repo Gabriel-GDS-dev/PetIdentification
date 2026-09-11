@@ -9,6 +9,13 @@ const PORT = Number(process.env.PORT || 5241);
 const HOST = process.env.HOST || "0.0.0.0";
 const IS_PRODUCTION_DEPLOY = Boolean(process.env.VERCEL || process.env.RENDER || process.env.NODE_ENV === "production");
 const SESSION_SECRET = process.env.SESSION_SECRET || (IS_PRODUCTION_DEPLOY ? "" : "pet-identification-dev-secret");
+const ANALYTICS_ADMIN_TOKEN = process.env.ANALYTICS_ADMIN_TOKEN || "";
+const ADMIN_EMAIL = normalizeEmail(process.env.ADMIN_EMAIL || "");
+const ANALYTICS_EVENTS = new Set([
+  "LOGIN", "CADASTRO_USUARIO", "CADASTRO_PET", "ADICIONOU_VACINA",
+  "UPLOAD_DOCUMENTO", "VISUALIZOU_CARTEIRA", "ABRIU_APP", "SINCRONIZOU_DADOS",
+  "FEEDBACK_ENVIADO", "API_ERROR"
+]);
 const MAX_JSON_BYTES = 4 * 1024 * 1024;
 const SYNC_CHUNK_MAX_COUNT = 80;
 const SYNC_CHUNK_MAX_AGE_MS = 60 * 60 * 1000;
@@ -33,7 +40,8 @@ const STATIC_FILES = new Set([
   "/", "/index.html", "/styles.css", "/app.js", "/service-worker.js", "/manifest.webmanifest",
   "/assets/pet-icon.svg", "/assets/pet-icon-dark.svg", "/assets/pet-icon-180.png", "/assets/pet-icon-192.png", "/assets/pet-icon-512.png",
   "/assets/pet-icon-maskable-512.png", "/assets/pet-icon-dark-192.png", "/assets/pet-icon-dark-512.png",
-  "/assets/fluxograma-registro-digital-animal.svg", "/assets/fluxograma-registro-digital-animal.png"
+  "/assets/fluxograma-registro-digital-animal.svg", "/assets/fluxograma-registro-digital-animal.png",
+  "/admin/analytics", "/admin/analytics.html"
 ]);
 const CONTENT_TYPES = {
   ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -112,6 +120,14 @@ async function handleApi(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/clinics/nearby") return findNearbyClinics(response, url.searchParams);
   if (request.method === "POST" && url.pathname === "/api/register") return registerUser(response, await readJson(request));
   if (request.method === "POST" && url.pathname === "/api/login") return loginUser(response, await readJson(request));
+  if (request.method === "POST" && url.pathname === "/api/analytics/event") {
+    const user = await requireUser(request);
+    return recordAnalyticsEvent(response, user, await readJson(request));
+  }
+  if (request.method === "GET" && url.pathname === "/api/admin/analytics") {
+    requireAnalyticsAdmin(request);
+    return sendJson(response, 200, await getAnalyticsDashboard());
+  }
   if (request.method === "GET" && url.pathname === "/api/state") {
     const user = await requireUser(request); return sendJson(response, 200, { user: publicUser(user), state: await getStoredState(user), syncedAt: new Date().toISOString() });
   }
@@ -251,7 +267,7 @@ function normalizeEmail(value) { return cleanText(value).toLowerCase(); }
 function coerceDate(value) { const text = cleanText(value); if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null; return text; }
 function coerceTimestamp(value) { const text = cleanText(value); if (!text) return null; const date = new Date(text); return Number.isNaN(date.getTime()) ? null : date.toISOString(); }
 async function readJson(request) { const chunks = []; let total = 0; for await (const chunk of request) { total += chunk.length; if (total > MAX_JSON_BYTES) throw httpError(413, "JSON muito grande para a API da Vercel."); chunks.push(chunk); } if (!chunks.length) return {}; try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw httpError(400, "JSON invalido."); } }
-function serveStatic(url, response, headOnly = false) { const pathname = url.pathname === "/" ? "/index.html" : url.pathname, extraFilePath = EXTRA_STATIC_FILES.get(url.pathname) || EXTRA_STATIC_FILES.get(pathname); if (!extraFilePath && !STATIC_FILES.has(url.pathname) && !STATIC_FILES.has(pathname)) return sendText(response, 404, "Arquivo nao encontrado."); const publicRoot = path.resolve(PUBLIC_DIR), extraRoot = path.resolve(PROJECT_DIR, "tcc_screenshots_mobile"), filePath = extraFilePath ? path.resolve(extraFilePath) : path.resolve(publicRoot, pathname.replace(/^\/+/, "")), allowedRoot = extraFilePath ? extraRoot : publicRoot; if (!filePath.startsWith(allowedRoot)) return sendText(response, 403, "Acesso negado."); fs.stat(filePath, (error, stats) => { if (error || !stats.isFile()) return sendText(response, 404, "Arquivo nao encontrado."); const extension = path.extname(filePath); response.writeHead(200, { "Content-Type": CONTENT_TYPES[extension] || "application/octet-stream", "Cache-Control": extension === ".html" ? "no-store" : "no-cache" }); if (headOnly) return response.end(); fs.createReadStream(filePath).pipe(response); }); }
+function serveStatic(url, response, headOnly = false) { const pathname = url.pathname === "/" ? "/index.html" : url.pathname === "/admin/analytics" ? "/admin/analytics.html" : url.pathname, extraFilePath = EXTRA_STATIC_FILES.get(url.pathname) || EXTRA_STATIC_FILES.get(pathname); if (!extraFilePath && !STATIC_FILES.has(url.pathname) && !STATIC_FILES.has(pathname)) return sendText(response, 404, "Arquivo nao encontrado."); const publicRoot = path.resolve(PUBLIC_DIR), extraRoot = path.resolve(PROJECT_DIR, "tcc_screenshots_mobile"), filePath = extraFilePath ? path.resolve(extraFilePath) : path.resolve(publicRoot, pathname.replace(/^\/+/, "")), allowedRoot = extraFilePath ? extraRoot : publicRoot; if (!filePath.startsWith(allowedRoot)) return sendText(response, 403, "Acesso negado."); fs.stat(filePath, (error, stats) => { if (error || !stats.isFile()) return sendText(response, 404, "Arquivo nao encontrado."); const extension = path.extname(filePath); response.writeHead(200, { "Content-Type": CONTENT_TYPES[extension] || "application/octet-stream", "Cache-Control": extension === ".html" ? "no-store" : "no-cache" }); if (headOnly) return response.end(); fs.createReadStream(filePath).pipe(response); }); }
 function sendJson(response, statusCode, payload) { response.writeHead(statusCode, { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type, Authorization", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Content-Type": "application/json; charset=utf-8" }); if (statusCode === 204) return response.end(); return response.end(JSON.stringify(payload)); }
 function sendText(response, statusCode, text) { response.writeHead(statusCode, { "Content-Type": "text/plain; charset=utf-8" }); response.end(text); }
 function httpError(statusCode, message) { const error = new Error(message); error.statusCode = statusCode; return error; }
@@ -324,6 +340,7 @@ async function registerUser(response, body) {
     if (error?.code === 11000) return sendJson(response, 409, { error: "Este e-mail ja esta cadastrado." });
     throw error;
   }
+  await insertAnalyticsEvent("CADASTRO_USUARIO", user.id);
   return sendJson(response, 201, { user: publicUser(user), token: signToken(user), state: null });
 }
 
@@ -332,6 +349,7 @@ async function loginUser(response, body) {
   const password = String(body.password || "");
   const user = await findUserByEmail(email);
   if (!user || !verifyPassword(password, user.password_hash)) return sendJson(response, 401, { error: "E-mail ou senha invalidos." });
+  await insertAnalyticsEvent("LOGIN", user.id);
   return sendJson(response, 200, { user: publicUser(user), token: signToken(user), state: await getStoredState(user) });
 }
 
@@ -568,6 +586,80 @@ function safeAttachmentDataUrl(value = "") {
   if (/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(text)) return text;
   if (/^data:application\/pdf;base64,/i.test(text)) return text;
   return "";
+}
+
+async function recordAnalyticsEvent(response, user, body = {}) {
+  const event = cleanText(body.event).toUpperCase();
+  if (!ANALYTICS_EVENTS.has(event)) throw httpError(400, "Evento de analytics invalido.");
+  const rawMetadata = body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+    ? body.metadata
+    : {};
+  const metadata = {};
+  for (const [key, value] of Object.entries(rawMetadata).slice(0, 12)) {
+    if (!/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(key)) continue;
+    if (["string", "number", "boolean"].includes(typeof value)) metadata[key] = String(value).slice(0, 200);
+  }
+  await insertAnalyticsEvent(event, user.id, metadata);
+  return sendJson(response, 202, { ok: true });
+}
+
+async function insertAnalyticsEvent(event, userId, metadata = {}) {
+  await pool.database.collection("analytics_events").insertOne({
+    event,
+    user_id: userId,
+    metadata,
+    created_at: new Date()
+  });
+}
+
+function requireAnalyticsAdmin(request) {
+  if (!ANALYTICS_ADMIN_TOKEN || !ADMIN_EMAIL) {
+    throw httpError(503, "Analytics administrativo nao configurado.");
+  }
+  const token = cleanText(request.headers["x-analytics-admin-token"]);
+  const email = normalizeEmail(request.headers["x-admin-email"]);
+  if (!timingSafeEqual(token, ANALYTICS_ADMIN_TOKEN) || email !== ADMIN_EMAIL) {
+    throw httpError(403, "Acesso administrativo negado.");
+  }
+}
+
+async function getAnalyticsDashboard() {
+  const events = pool.database.collection("analytics_events");
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const weekStart = new Date(todayStart);
+  weekStart.setDate(weekStart.getDate() - 6);
+  const [uniqueToday, uniqueWeek, eventCounts, users, states, feedbacks] = await Promise.all([
+    events.distinct("user_id", { created_at: { $gte: todayStart } }),
+    events.distinct("user_id", { created_at: { $gte: weekStart } }),
+    events.aggregate([{ $group: { _id: "$event", total: { $sum: 1 } } }]).toArray(),
+    pool.database.collection("users").countDocuments(),
+    pool.database.collection("wallet_states").find({}, { projection: { state: 1 } }).toArray(),
+    events.countDocuments({ event: "FEEDBACK_ENVIADO" })
+  ]);
+  const counts = Object.fromEntries(eventCounts.map((item) => [item._id, item.total]));
+  const totals = states.reduce((result, item) => {
+    const state = item.state || {};
+    result.pets += Array.isArray(state.pets) ? state.pets.length : 0;
+    result.vaccines += Array.isArray(state.vaccines) ? state.vaccines.length : 0;
+    result.documents += Array.isArray(state.documents) ? state.documents.length : 0;
+    return result;
+  }, { pets: 0, vaccines: 0, documents: 0 });
+  return {
+    generatedAt: now.toISOString(),
+    users,
+    uniqueUsersToday: uniqueToday.length,
+    uniqueUsersWeek: uniqueWeek.length,
+    logins: counts.LOGIN || 0,
+    pets: totals.pets,
+    vaccines: totals.vaccines,
+    documents: totals.documents,
+    feedbacks,
+    synchronizations: counts.SINCRONIZOU_DADOS || 0,
+    apiErrors: counts.API_ERROR || 0,
+    events: counts
+  };
 }
 
 async function saveWalletState(user, incomingState, clientUpdatedAt) {

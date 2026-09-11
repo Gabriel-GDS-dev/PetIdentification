@@ -51,6 +51,9 @@ async function createPoolWithSchema() {
   await database.collection("wallet_attachments").createIndex({ user_id: 1, id: 1 }, { unique: true });
   await database.collection("sync_chunks").createIndex({ user_id: 1, sync_id: 1, index: 1 }, { unique: true });
   await database.collection("sync_chunks").createIndex({ updated_at: 1 }, { expireAfterSeconds: 3600 });
+  await database.collection("analytics_events").createIndex({ created_at: -1 });
+  await database.collection("analytics_events").createIndex({ event: 1, created_at: -1 });
+  await database.collection("analytics_events").createIndex({ user_id: 1, created_at: -1 });
   await database.command({ ping: 1 });
   return { client, database };
 }
