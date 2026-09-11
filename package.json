@@ -15,10 +15,10 @@
     "android:prepare": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File backend\\scripts\\prepare-android.ps1",
     "server:stop": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File backend\\scripts\\stop-server.ps1",
     "internet": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File backend\\scripts\\start-internet.ps1",
-    "start": "npm.cmd --prefix backend start",
-    "celular": "npm.cmd --prefix backend start",
-    "celular:usb": "npm.cmd run android:prepare && npm.cmd --prefix backend start",
-    "dev": "npm.cmd --prefix backend run dev",
-    "build": "node -e \"console.log('Frontend estatico pronto para a Vercel')\""
+    "start": "node backend/server.js",
+    "celular": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File backend\\scripts\\start-server.ps1",
+    "celular:usb": "npm run android:prepare && npm run celular",
+    "dev": "node backend/server.js",
+    "build": "node -e \"console.log('Frontend estatico pronto para deploy')\""
   }
 }

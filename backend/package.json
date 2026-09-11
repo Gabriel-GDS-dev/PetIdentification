@@ -5,8 +5,9 @@
   "description": "PWA de identificacao pet com API Node e MongoDB.",
   "main": "server.js",
   "scripts": {
-    "start": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\\start-server.ps1",
-    "dev": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\\start-server.ps1"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\\start-server.ps1"
   },
   "dependencies": {
     "mongodb": "^6.13.1"

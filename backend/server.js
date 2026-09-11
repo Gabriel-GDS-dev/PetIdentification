@@ -7,7 +7,8 @@ const { createPoolWithSchema, formatDatabaseError, getDatabaseName } = require("
 
 const PORT = Number(process.env.PORT || 5241);
 const HOST = process.env.HOST || "0.0.0.0";
-const SESSION_SECRET = process.env.SESSION_SECRET || (process.env.VERCEL ? "" : "pet-identification-dev-secret");
+const IS_PRODUCTION_DEPLOY = Boolean(process.env.VERCEL || process.env.RENDER || process.env.NODE_ENV === "production");
+const SESSION_SECRET = process.env.SESSION_SECRET || (IS_PRODUCTION_DEPLOY ? "" : "pet-identification-dev-secret");
 const MAX_JSON_BYTES = 4 * 1024 * 1024;
 const SYNC_CHUNK_MAX_COUNT = 80;
 const SYNC_CHUNK_MAX_AGE_MS = 60 * 60 * 1000;
@@ -42,6 +43,7 @@ let pool;
 let poolPromise;
 
 async function main() {
+  assertSessionSecret();
   await initializePool();
   const server = http.createServer((request, response) => {
     handleRequest(request, response).catch((error) => {
@@ -266,7 +268,7 @@ async function vercelHandler(request, response) {
     return originalEnd.apply(this, args);
   };
   try {
-    if (!SESSION_SECRET) throw new Error("SESSION_SECRET nao configurado no ambiente de producao.");
+    assertSessionSecret();
     await initializePool();
     return await handleRequest(request, response);
   } catch (error) {
@@ -278,6 +280,10 @@ async function vercelHandler(request, response) {
     });
     return sendJson(response, 500, { error: publicStartupErrorMessage(error) });
   }
+}
+
+function assertSessionSecret() {
+  if (!SESSION_SECRET) throw new Error("SESSION_SECRET nao configurado no ambiente de producao.");
 }
 
 function publicStartupErrorMessage(error) {

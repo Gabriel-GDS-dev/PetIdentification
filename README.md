@@ -34,7 +34,7 @@ npm.cmd install
 Use:
 
 ```powershell
-npm.cmd start
+npm.cmd run celular
 ```
 
 Esse comando libera a porta `5241` caso uma instância antiga deste app tenha ficado aberta e inicia backend + frontend.
@@ -147,6 +147,32 @@ Para usar outro MongoDB local ou Atlas, defina a conexão antes dos comandos:
 $env:MONGODB_URI="mongodb+srv://USUARIO:SENHA@SEU-CLUSTER.mongodb.net/?retryWrites=true&w=majority"
 $env:MONGODB_DB="pet_identification"
 ```
+
+## Deploy pelo GitHub no Render
+
+No Render, publique como **Web Service** Node.js, não como Static Site, porque este projeto serve o PWA e a API pelo mesmo `backend/server.js`.
+
+Configuração recomendada:
+
+```text
+Root Directory: .
+Build Command: npm install; npm run build
+Start Command: npm start
+Health Check Path: /api/health
+```
+
+O `npm start` executa `node backend/server.js`. O servidor já usa `process.env.PORT` e escuta em `0.0.0.0`, que é o formato esperado para Web Services no Render.
+
+Em **Environment**, adicione:
+
+```text
+MONGODB_URI=mongodb+srv://...
+MONGODB_DB=pet_identification
+SESSION_SECRET=um-segredo-longo-aleatorio
+NODE_ENV=production
+```
+
+Depois clique em **Manual Deploy > Clear build cache & deploy** se o Render tiver cache de uma tentativa anterior. No MongoDB Atlas, libere o acesso de rede para o Render. Para um primeiro teste, use `0.0.0.0/0` com um usuário restrito; depois, se seu plano permitir IP fixo/outbound estático, troque por uma regra mais fechada.
 
 ## Deploy pelo GitHub na Vercel
 
