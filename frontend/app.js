@@ -14,7 +14,7 @@ if (!IS_LOCAL_HOST) {
 const STORAGE_KEY = "pet-id-wallet-state-v1";
 const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v4";
 const APP_NAME = "Registro Digital Animal";
-const APP_VERSION = "39";
+const APP_VERSION = "40";
 const APP_CACHE_NAME = `registro-digital-animal-v${APP_VERSION}`;
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
@@ -788,7 +788,7 @@ async function syncWithServer(reason = "auto", options = {}) {
       chunkCount: payload?.chunkCount || state.sync?.chunkCount || 0
     };
     saveState({ sync: false });
-    if (!options.silent && reason === "manual") notify("Dados sincronizados com o MongoDB.");
+    if (!options.silent && reason === "manual") notify("Dados sincronizados com o PostgreSQL.");
     render();
   } catch (error) {
     const isSessionError = error.status === 401;
@@ -2662,12 +2662,12 @@ function settingsView() {
         ${accessibilityCard()}
         <div class="card">
           <h2>Dados do aplicativo</h2>
-          <p class="muted" style="margin-top: 8px;">O celular mantém uma cópia offline e sincroniza com o MongoDB quando o servidor está acessível.</p>
+          <p class="muted" style="margin-top: 8px;">O celular mantém uma cópia offline e sincroniza com o PostgreSQL quando o servidor está acessível.</p>
           <div class="button-row" style="margin-top: 14px;">
             <button class="secondary-button" type="button" data-action="toggle-theme" data-hint="Alterna entre modo claro e escuro.">${themeIcon()} Tema ${state.theme === "dark" ? "claro" : "escuro"}</button>
             <button class="secondary-button" type="button" data-action="export" data-hint="Baixa uma cópia dos dados em JSON.">Exportar</button>
             <button class="secondary-button" type="button" data-action="import" data-hint="Restaura um backup salvo anteriormente.">Importar</button>
-            <button class="secondary-button" type="button" data-action="sync-now" data-hint="Envia os dados deste aparelho para o MongoDB.">Sincronizar</button>
+            <button class="secondary-button" type="button" data-action="sync-now" data-hint="Envia os dados deste aparelho para o PostgreSQL.">Sincronizar</button>
             <button class="secondary-button" type="button" data-action="clear-app-cache" data-hint="Remove arquivos antigos salvos pelo PWA e recarrega a versão atual.">Limpar cache</button>
             <button class="secondary-button" type="button" data-action="logout">Sair</button>
             <button class="danger-button" type="button" data-action="reset-demo">Restaurar demo</button>
@@ -2683,7 +2683,7 @@ function settingsView() {
             ${detailRow("Android", "Instalável pelo Chrome ou Edge")}
             ${detailRow("iPhone", "Adicionar à Tela de Início pelo Safari")}
             ${detailRow("Offline", "Arquivos ficam em cache e dados ficam no aparelho")}
-            ${detailRow("Banco", "MongoDB via API /api/sync")}
+            ${detailRow("Banco", "PostgreSQL via API /api/sync")}
           </div>
         </div>
       </aside>
@@ -2766,7 +2766,7 @@ function syncLabel(status) {
 
 function syncDescription(sync) {
   if (!state.auth?.apiToken) return "Conta local. Faça login com o servidor ativo para gravar no banco.";
-  if (sync.status === "synced") return "Dados salvos no celular e no MongoDB.";
+  if (sync.status === "synced") return "Dados salvos no celular e no PostgreSQL.";
   if (sync.status === "syncing") return "Enviando alterações para a API.";
   if (sync.status === "error") return "O app segue funcionando offline no celular.";
   return "Pronto para sincronizar com a API.";
@@ -3608,7 +3608,7 @@ async function login(data) {
   state.sync = {
     ...defaultState.sync,
     status: "local",
-    lastError: apiLoginRejected ? "A senha desta conta nao confere com o banco. Confira a senha ou redefina a senha no MongoDB." : "",
+    lastError: apiLoginRejected ? "A senha desta conta nao confere com o banco. Confira a senha ou redefina a senha no PostgreSQL." : "",
     apiOnline: false
   };
 

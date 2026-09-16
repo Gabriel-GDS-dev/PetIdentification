@@ -85,7 +85,13 @@ CREATE TABLE IF NOT EXISTS pet_documents (
   notes TEXT NOT NULL DEFAULT '',
   attachment_name TEXT NOT NULL DEFAULT '',
   attachment_type TEXT NOT NULL DEFAULT '',
+  attachment_original_type TEXT NOT NULL DEFAULT '',
   attachment_size INTEGER NOT NULL DEFAULT 0,
+  attachment_storage_id TEXT NOT NULL DEFAULT '',
+  attachment_url TEXT NOT NULL DEFAULT '',
+  attachment_uploaded_at TIMESTAMPTZ,
+  attachment_stored_at TIMESTAMPTZ,
+  attachment_has_data BOOLEAN NOT NULL DEFAULT false,
   attachment_data TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -95,7 +101,13 @@ CREATE TABLE IF NOT EXISTS pet_documents (
 
 ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_name TEXT NOT NULL DEFAULT '';
 ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_type TEXT NOT NULL DEFAULT '';
+ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_original_type TEXT NOT NULL DEFAULT '';
 ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_size INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_storage_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_uploaded_at TIMESTAMPTZ;
+ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_stored_at TIMESTAMPTZ;
+ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_has_data BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE pet_documents ADD COLUMN IF NOT EXISTS attachment_data TEXT NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS pet_travel_plans (
@@ -169,9 +181,48 @@ CREATE TABLE IF NOT EXISTS pet_wallet_states (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS pet_wallet_attachments (
+  user_id TEXT NOT NULL REFERENCES pet_app_users(id) ON DELETE CASCADE,
+  id TEXT NOT NULL,
+  document_id TEXT NOT NULL DEFAULT '',
+  name TEXT NOT NULL DEFAULT '',
+  type TEXT NOT NULL DEFAULT '',
+  original_type TEXT NOT NULL DEFAULT '',
+  size INTEGER NOT NULL DEFAULT 0,
+  data_url TEXT NOT NULL DEFAULT '',
+  uploaded_at TIMESTAMPTZ,
+  stored_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, id)
+);
+
+CREATE TABLE IF NOT EXISTS pet_sync_chunks (
+  user_id TEXT NOT NULL REFERENCES pet_app_users(id) ON DELETE CASCADE,
+  sync_id TEXT NOT NULL,
+  chunk_index INTEGER NOT NULL,
+  total INTEGER NOT NULL DEFAULT 0,
+  body_bytes INTEGER NOT NULL DEFAULT 0,
+  data TEXT NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, sync_id, chunk_index)
+);
+
+CREATE TABLE IF NOT EXISTS pet_analytics_events (
+  id BIGSERIAL PRIMARY KEY,
+  event TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES pet_app_users(id) ON DELETE CASCADE,
+  metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS pet_pets_user_idx ON pet_pets(user_id);
 CREATE INDEX IF NOT EXISTS pet_vaccines_user_pet_idx ON pet_vaccines(user_id, pet_id);
 CREATE INDEX IF NOT EXISTS pet_documents_user_pet_idx ON pet_documents(user_id, pet_id);
+CREATE INDEX IF NOT EXISTS pet_wallet_attachments_document_idx ON pet_wallet_attachments(user_id, document_id);
+CREATE INDEX IF NOT EXISTS pet_sync_chunks_updated_idx ON pet_sync_chunks(updated_at);
+CREATE INDEX IF NOT EXISTS pet_analytics_events_created_idx ON pet_analytics_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS pet_analytics_events_event_created_idx ON pet_analytics_events(event, created_at DESC);
+CREATE INDEX IF NOT EXISTS pet_analytics_events_user_created_idx ON pet_analytics_events(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS pet_feedback_answers_section_idx ON pet_feedback_answers(section, question_key);
 CREATE INDEX IF NOT EXISTS pet_feedback_answers_submitted_idx ON pet_feedback_answers(submitted_at DESC);
 CREATE INDEX IF NOT EXISTS pet_wallet_states_updated_idx ON pet_wallet_states(updated_at DESC);
@@ -351,4 +402,9 @@ FOR EACH ROW EXECUTE FUNCTION pet_set_updated_at();
 DROP TRIGGER IF EXISTS pet_wallet_states_updated_at ON pet_wallet_states;
 CREATE TRIGGER pet_wallet_states_updated_at
 BEFORE UPDATE ON pet_wallet_states
+FOR EACH ROW EXECUTE FUNCTION pet_set_updated_at();
+
+DROP TRIGGER IF EXISTS pet_wallet_attachments_updated_at ON pet_wallet_attachments;
+CREATE TRIGGER pet_wallet_attachments_updated_at
+BEFORE UPDATE ON pet_wallet_attachments
 FOR EACH ROW EXECUTE FUNCTION pet_set_updated_at();

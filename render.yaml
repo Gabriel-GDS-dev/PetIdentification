@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: pet-identification
+    runtime: node
+    plan: free
+    buildCommand: npm install; npm run build
+    startCommand: npm start
+    healthCheckPath: /api/live
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pet-identification-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ANALYTICS_ADMIN_TOKEN
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
+
+databases:
+  - name: pet-identification-db
+    databaseName: pet_identification
+    user: pet_identification
+    plan: free
+    postgresMajorVersion: "18"

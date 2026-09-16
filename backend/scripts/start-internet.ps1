@@ -127,6 +127,12 @@ try {
   }
 
   Set-PetSessionSecret -ProjectDirectory $projectDirectory
+  if (-not $env:DATABASE_URL) {
+    & "$PSScriptRoot\start-local-db.ps1"
+    $dbPort = if ($env:PET_DB_PORT) { [int]$env:PET_DB_PORT } else { 55432 }
+    $dbName = if ($env:PET_DB_NAME) { $env:PET_DB_NAME } else { "pet_identification" }
+    $env:DATABASE_URL = "postgresql://postgres@127.0.0.1:$dbPort/$dbName"
+  }
   $cloudflared = Resolve-Cloudflared
 
   $backendOut = Join-Path $logsDirectory "backend.out.log"

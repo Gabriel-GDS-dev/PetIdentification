@@ -2,7 +2,7 @@
   "name": "pet-identification",
   "version": "1.0.0",
   "private": true,
-  "description": "PWA de identificacao pet com API Node e MongoDB.",
+  "description": "PWA de identificacao pet com API Node e PostgreSQL.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -10,6 +10,6 @@
     "local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\\start-server.ps1"
   },
   "dependencies": {
-    "mongodb": "^6.13.1"
+    "pg": "^8.23.0"
   }
 }

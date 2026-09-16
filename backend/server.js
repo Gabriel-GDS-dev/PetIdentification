@@ -61,7 +61,7 @@ async function main() {
     console.log(`Registro Digital Animal rodando no computador: http://127.0.0.1:${PORT}`);
     for (const accessUrl of getNetworkAccessUrls(PORT)) console.log(`Abra no celular conectado ao mesmo Wi-Fi: ${accessUrl}`);
     initializePool()
-      .then(() => console.log(`Banco conectado: MongoDB/${getDatabaseName()}`))
+      .then(() => console.log(`Banco conectado: PostgreSQL/${getDatabaseName()}`))
       .catch((error) => console.error("Banco indisponivel durante a inicializacao:", publicStartupErrorMessage(error)));
   });
 }
@@ -137,7 +137,7 @@ async function handleApi(request, response, url) {
         message: error?.message,
         stack: error?.stack
       });
-      throw httpError(503, "Nao foi possivel consultar o analytics no MongoDB. Verifique os logs do Render.");
+      throw httpError(503, "Nao foi possivel consultar o analytics no PostgreSQL. Verifique os logs do Render.");
     }
   }
   if (request.method === "GET" && url.pathname === "/api/state") {
@@ -320,14 +320,14 @@ function assertSessionSecret() {
 function publicStartupErrorMessage(error) {
   const message = String(error?.message || "");
   if (message.includes("SESSION_SECRET")) return message;
-  if (message.includes("MONGODB_URI")) return message;
-  if (["28P01", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "ECONNRESET"].includes(error?.code)) return formatDatabaseError(error);
-  if (String(error?.name || "").startsWith("Mongo") || /bad auth|authentication failed/i.test(message)) return formatDatabaseError(error);
-  if (/^[0-9A-Z]{5}$/.test(String(error?.code || ""))) return `Erro do MongoDB (${error.code}): ${message}`;
+  if (message.includes("DATABASE_URL")) return message;
+  if (["28P01", "28000", "3D000", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "ECONNRESET"].includes(error?.code)) return formatDatabaseError(error);
+  if (/password authentication failed|database .* does not exist/i.test(message)) return formatDatabaseError(error);
+  if (/^[0-9A-Z]{5}$/.test(String(error?.code || ""))) return `Erro do PostgreSQL (${error.code}): ${message}`;
   return "Erro interno do servidor.";
 }
 
-// MongoDB stores the user documents and the complete wallet state atomically.
+// PostgreSQL stores the complete wallet state in JSONB and mirrors the main fields in relational tables.
 async function registerUser(response, body) {
   const name = cleanText(body.name);
   const email = normalizeEmail(body.email);
