@@ -14,7 +14,7 @@ if (!IS_LOCAL_HOST) {
 const STORAGE_KEY = "pet-id-wallet-state-v1";
 const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v4";
 const APP_NAME = "Registro Digital Animal";
-const APP_VERSION = "40";
+const APP_VERSION = "41";
 const APP_CACHE_NAME = `registro-digital-animal-v${APP_VERSION}`;
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
@@ -109,6 +109,7 @@ const defaultState = {
   accessibility: {
     largeText: false,
     highContrast: false,
+    colorBlind: false,
     reduceMotion: false,
     buttonHints: false
   },
@@ -698,6 +699,7 @@ function normalizeAccessibility(partialAccessibility = {}) {
     ...(partialAccessibility || {}),
     largeText: Boolean(partialAccessibility?.largeText),
     highContrast: Boolean(partialAccessibility?.highContrast),
+    colorBlind: Boolean(partialAccessibility?.colorBlind),
     reduceMotion: Boolean(partialAccessibility?.reduceMotion),
     buttonHints: Boolean(partialAccessibility?.buttonHints)
   };
@@ -1242,6 +1244,7 @@ function applyTheme() {
   document.documentElement.dataset.theme = state.theme === "dark" ? "dark" : "light";
   document.documentElement.dataset.largeText = String(accessibility.largeText);
   document.documentElement.dataset.contrast = accessibility.highContrast ? "high" : "default";
+  document.documentElement.dataset.colorVision = accessibility.colorBlind ? "color-blind" : "default";
   document.documentElement.dataset.reduceMotion = String(accessibility.reduceMotion);
   document.documentElement.dataset.buttonHints = String(accessibility.buttonHints);
   document
@@ -1286,6 +1289,7 @@ function authView() {
       </section>
 
       <section class="auth-panel" aria-label="${isRegister ? "Criar conta" : "Entrar"}">
+        ${authAccessibilityTools()}
         <div class="auth-tabs">
           <button class="${!isRegister ? "active" : ""}" type="button" data-action="auth-view" data-mode="login">Entrar</button>
           <button class="${isRegister ? "active" : ""}" type="button" data-action="auth-view" data-mode="register">Cadastrar</button>
@@ -1293,6 +1297,17 @@ function authView() {
         ${isRegister ? registerForm() : loginForm()}
       </section>
     </main>
+  `;
+}
+
+function authAccessibilityTools() {
+  const accessibility = normalizeAccessibility(state.accessibility);
+  return `
+    <div class="auth-tools" aria-label="Ajustes rápidos de acessibilidade">
+      <button class="secondary-button" type="button" data-action="toggle-theme" data-hint="Alterna entre modo claro e escuro." aria-label="Alternar tema">${themeIcon()} Tema</button>
+      <button class="secondary-button ${accessibility.largeText ? "active" : ""}" type="button" data-action="toggle-accessibility" data-option="largeText" aria-pressed="${accessibility.largeText ? "true" : "false"}">A+ Texto</button>
+      <button class="secondary-button ${accessibility.colorBlind ? "active" : ""}" type="button" data-action="toggle-accessibility" data-option="colorBlind" aria-pressed="${accessibility.colorBlind ? "true" : "false"}">Modo daltônico</button>
+    </div>
   `;
 }
 
@@ -1323,6 +1338,8 @@ function registerForm() {
 
 function layout(content) {
   const active = state.currentView;
+  const locationLabel = [state.owner.city, state.owner.state].filter(Boolean).join(", ") || "Local não informado";
+  const petCountLabel = `${state.pets.length} pet${state.pets.length === 1 ? "" : "s"} cadastrado${state.pets.length === 1 ? "" : "s"}`;
   return `
     <a class="skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
     <main class="screen view-${active}">
@@ -1330,15 +1347,21 @@ function layout(content) {
         <button class="icon-button" type="button" data-action="drawer" aria-label="Abrir menu">☰</button>
         <div class="brand">
           <span class="brand-mark"><img src="${logoSrc()}" alt="" /></span>
-          <span>
+          <span class="brand-copy">
             <span class="brand-title">${APP_NAME}</span>
-            <span class="brand-subtitle">${escapeHTML(state.owner.city)}, ${escapeHTML(state.owner.state)} · ${state.pets.length} pet${state.pets.length === 1 ? "" : "s"}</span>
+            <span class="brand-meta" aria-label="Local: ${escapeHTML(locationLabel)}. Pets cadastrados: ${state.pets.length}.">
+              <span class="brand-chip"><span class="brand-chip-label">Local</span> ${escapeHTML(locationLabel)}</span>
+              <span class="brand-chip"><span class="brand-chip-label">Pets</span> ${escapeHTML(petCountLabel)}</span>
+            </span>
           </span>
         </div>
         <div class="top-actions">
           <button class="icon-button" type="button" data-action="toggle-theme" aria-label="Alternar tema">${themeIcon()}</button>
           <button class="secondary-button desktop-only" type="button" data-action="new-pet">＋ Pet</button>
-          <button class="avatar-button" type="button" data-action="edit-owner" aria-label="Editar tutor">${initials(state.owner.name)}</button>
+          <button class="owner-button" type="button" data-action="edit-owner" aria-label="Editar dados do tutor">
+            <span class="owner-button-avatar" aria-hidden="true">${initials(state.owner.name)}</span>
+            <span class="owner-button-text">Editar tutor</span>
+          </button>
         </div>
       </header>
       <section id="conteudo-principal" class="content" tabindex="-1">${content}</section>
@@ -1389,6 +1412,7 @@ function toggleAccessibility(option) {
   const labels = {
     largeText: "Texto maior",
     highContrast: "Alto contraste",
+    colorBlind: "Modo daltônico",
     reduceMotion: "Movimento reduzido",
     buttonHints: "Ajuda nos botões"
   };
@@ -1429,9 +1453,9 @@ function homeView() {
       <div class="hero-panel">
         ${installBanner()}
         <div class="status-stack">
-          ${statusCard("◉", "Pets cadastrados", state.pets.length)}
-          ${statusCard("✚", "Vacinas em atenção", upcoming.length)}
-          ${statusCard("⇄", "Checklist de viagem", `${progress}%`)}
+          ${statusCard("◉", "Pets cadastrados", state.pets.length, state.pets.length === 1 ? "pet" : "pets")}
+          ${statusCard("✚", "Vacinas em atenção", upcoming.length, upcoming.length === 1 ? "vacina" : "vacinas")}
+          ${statusCard("⇄", "Checklist de viagem", `${progress}%`, "concluído")}
         </div>
       </div>
     </div>
@@ -2708,6 +2732,7 @@ function accessibilityCard() {
       <div class="toggle-list" style="margin-top: 12px;">
         ${accessibilityToggle("largeText", "Texto maior", "Aumenta letras e áreas de toque nas telas principais.", accessibility.largeText)}
         ${accessibilityToggle("highContrast", "Alto contraste", "Reforça bordas e cores para facilitar a leitura.", accessibility.highContrast)}
+        ${accessibilityToggle("colorBlind", "Modo daltônico", "Troca as cores de status por uma paleta azul, âmbar e magenta com símbolos de apoio.", accessibility.colorBlind)}
         ${accessibilityToggle("reduceMotion", "Reduzir movimento", "Diminui animações e rolagens suaves.", accessibility.reduceMotion)}
         ${accessibilityToggle("buttonHints", "Ajuda nos botões", "Mostra uma frase curta em ações importantes.", accessibility.buttonHints)}
       </div>
@@ -2772,15 +2797,19 @@ function syncDescription(sync) {
   return "Pronto para sincronizar com a API.";
 }
 
-function statusCard(icon, label, value) {
+function statusCard(icon, label, value, unit = "") {
+  const readableValue = [value, unit].filter(Boolean).join(" ");
   return `
-    <div class="status-card">
-      <span class="status-icon">${icon}</span>
-      <span>
-        <strong>${label}</strong>
-        <span class="muted small" style="display:block;">Atualizado hoje</span>
+    <div class="status-card" aria-label="${escapeHTML(label)}: ${escapeHTML(readableValue)}. Atualizado hoje.">
+      <span class="status-icon" aria-hidden="true">${icon}</span>
+      <span class="status-copy">
+        <strong>${escapeHTML(label)}</strong>
+        <span class="muted small">Atualizado hoje</span>
       </span>
-      <span class="status-value">${value}</span>
+      <span class="status-value" aria-hidden="true">
+        <strong>${escapeHTML(value)}</strong>
+        ${unit ? `<span>${escapeHTML(unit)}</span>` : ""}
+      </span>
     </div>
   `;
 }
