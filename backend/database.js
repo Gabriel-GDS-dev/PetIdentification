@@ -521,7 +521,7 @@ async function syncStructuredState(client, userId, rawState) {
         cleanText(vaccine.id),
         cleanText(vaccine.petId),
         cleanText(vaccine.name),
-        cleanText(vaccine.dose),
+        "",
         coerceDate(vaccine.applicationDate),
         coerceDate(vaccine.dueDate),
         cleanText(vaccine.clinic),

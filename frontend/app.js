@@ -53,7 +53,7 @@ const FEEDBACK_LIKERT_SECTIONS = [
       {
         key: "vaccines",
         summary: "Vacinas",
-        label: "A área de vacinas precisa mostrar melhor dose, data de aplicação, vencimento e clínica.",
+        label: "A área de vacinas precisa mostrar melhor data de aplicação, vencimento, clínica e status.",
         hint: "Pense na facilidade para conferir o histórico e saber quando a próxima vacina vence."
       },
       {
@@ -659,6 +659,7 @@ function loadState() {
       currentView: "home",
       selectedPetId,
       accessibility: normalizeAccessibility(baseState.accessibility),
+      vaccines: normalizeVaccines(baseState.vaccines),
       travel: normalizeTravelEntry(baseState.travel || getTravelForPet(selectedPetId)),
       travelByPet: normalizedTravelByPet,
       feedback: Array.isArray(baseState.feedback) ? baseState.feedback : []
@@ -668,6 +669,7 @@ function loadState() {
     fallback.currentView = "home";
     fallback.selectedPetId = fallback.pets[0]?.id || "";
     fallback.accessibility = normalizeAccessibility(fallback.accessibility);
+    fallback.vaccines = normalizeVaccines(fallback.vaccines);
     fallback.travel = normalizeTravelEntry(fallback.travel || blankTravel());
     fallback.travelByPet = normalizeTravelByPet(fallback.travelByPet || {});
     return fallback;
@@ -683,6 +685,7 @@ function mergeState(partial = {}) {
     sync: { ...defaultState.sync, ...(partial.sync || {}) },
     users: Array.isArray(partial.users) ? partial.users : [],
     owner: normalizeOwner(partial.owner),
+    vaccines: normalizeVaccines(partial.vaccines || defaultState.vaccines),
     travel: normalizeTravelEntry(partial.travel || defaultState.travel),
     travelByPet: normalizeTravelByPet(partial.travelByPet || (partial.travel ? { [partial.travel.selectedPetId || partial.selectedPetId || ""]: partial.travel } : {})),
     feedback: Array.isArray(partial.feedback) ? partial.feedback : []
@@ -715,6 +718,13 @@ function normalizeOwner(partialOwner = {}) {
     }
   }
   return owner;
+}
+
+function normalizeVaccines(vaccines = []) {
+  return (Array.isArray(vaccines) ? vaccines : []).map((vaccine) => {
+    const entry = vaccine && typeof vaccine === "object" ? vaccine : {};
+    return { ...entry, dose: "" };
+  });
 }
 
 function saveState(options = {}) {
@@ -1211,6 +1221,7 @@ function stateForServer() {
     ...doc,
     attachment: documentAttachmentForServer(doc.attachment)
   }));
+  snapshot.vaccines = normalizeVaccines(snapshot.vaccines);
   return snapshot;
 }
 
@@ -1584,7 +1595,7 @@ function walletView() {
             ${detailRow("Raça", pet.breed)}
             ${detailRow("Sexo", pet.sex)}
             ${detailRow("Nascimento", formatDate(pet.birthDate))}
-            ${detailRow("Peso", pet.weight ? `${pet.weight} kg` : "")}
+            ${detailRow("Peso", petWeightLabel(pet.weight))}
             ${detailRow("Cor", pet.color)}
             ${detailRow("Microchip", pet.microchip)}
             ${detailRow("Temperamento", pet.temperament)}
@@ -1791,7 +1802,7 @@ function animalWalletDocumentView(pet, petVaccines, petDocs) {
             ${detailRow("Raça", pet.breed)}
             ${detailRow("Sexo", pet.sex)}
             ${detailRow("Nascimento", formatDate(pet.birthDate))}
-            ${detailRow("Peso", pet.weight ? `${pet.weight} kg` : "")}
+            ${detailRow("Peso", petWeightLabel(pet.weight))}
             ${detailRow("Microchip", pet.microchip)}
             ${detailRow("Tutor", state.owner.name)}
             ${detailRow("Endereço", address)}
@@ -1993,7 +2004,7 @@ function walletDocumentView(pet, petVaccines, petDocs) {
           ${walletData("Microchip", pet.microchip)}
           ${walletData("Nascimento", formatDate(pet.birthDate))}
           ${walletData("Sexo", pet.sex)}
-          ${walletData("Peso", pet.weight ? `${pet.weight} kg` : "")}
+          ${walletData("Peso", petWeightLabel(pet.weight))}
           ${walletData("Cor", pet.color)}
         </div>
 
@@ -2052,7 +2063,7 @@ function walletDocumentView(pet, petVaccines, petDocs) {
             ${detailRow("Raça", pet.breed)}
             ${detailRow("Sexo", pet.sex)}
             ${detailRow("Nascimento", formatDate(pet.birthDate))}
-            ${detailRow("Peso", pet.weight ? `${pet.weight} kg` : "")}
+            ${detailRow("Peso", petWeightLabel(pet.weight))}
             ${detailRow("Microchip", pet.microchip)}
             ${detailRow("Observações", pet.notes)}
           </div>
@@ -2867,7 +2878,7 @@ function vaccineItem(vaccine) {
       <div class="timeline-top">
         <div>
           <h3>${escapeHTML(vaccine.name)}</h3>
-          <p class="muted small">${escapeHTML(pet?.name || "Pet removido")} · ${escapeHTML(vaccine.dose || "Dose")}</p>
+          <p class="muted small">${escapeHTML(pet?.name || "Pet removido")}</p>
         </div>
         <span class="pill ${status.type}">${status.label}</span>
       </div>
@@ -3032,6 +3043,18 @@ function detailRow(label, value) {
   `;
 }
 
+function normalizeWeight(value = "") {
+  const text = String(value || "").trim().replace(/\s+/g, "");
+  if (!text) return "";
+  const normalized = text.replace(".", ",");
+  return /^\d+(,\d+)?$/.test(normalized) ? normalized : String(value || "").trim();
+}
+
+function petWeightLabel(value = "") {
+  const weight = normalizeWeight(value);
+  return weight ? `${weight} kg` : "";
+}
+
 function installBanner(force = false) {
   const canInstall = Boolean(deferredInstallPrompt) && !state.installDismissed;
   const showIos = isIos() && !isStandalone() && !state.installDismissed;
@@ -3131,7 +3154,7 @@ function openPetModal(id = "") {
           ${field("Raça", "breed", pet.breed)}
           ${selectField("Sexo", "sex", pet.sex, ["Fêmea", "Macho", "Não informado"])}
           ${field("Nascimento", "birthDate", pet.birthDate, "date")}
-          ${field("Peso (kg)", "weight", pet.weight, "number")}
+          ${field("Peso (kg)", "weight", normalizeWeight(pet.weight), "text", false, 'inputmode="decimal" pattern="[0-9]+([,.][0-9]+)?" placeholder="16,3"')}
           ${field("Cor", "color", pet.color)}
           ${field("Microchip", "microchip", pet.microchip)}
           ${field("Registro", "registry", pet.registry)}
@@ -3259,7 +3282,6 @@ function openVaccineModal(petId = "", vaccineId = "") {
         <div class="form-grid two">
           ${petSelectField("Pet", "petId", selected)}
           ${field("Vacina", "name", vaccine?.name || "", "text", true)}
-          ${field("Dose", "dose", vaccine?.dose || "")}
           ${field("Data da aplicação", "applicationDate", vaccine?.applicationDate || todayISO, "date")}
           ${field("Próxima dose", "dueDate", vaccine?.dueDate || "", "date", true)}
           ${field("Clínica", "clinic", vaccine?.clinic || "")}
@@ -3868,7 +3890,7 @@ async function handleForm(form) {
     const pet = {
       ...data,
       id: data.id || createId("pet"),
-      weight: data.weight || "",
+      weight: normalizeWeight(data.weight),
       avatarColor: data.avatarColor || "#17716b",
       photo: data.photo || existingPet?.photo || "",
       signature: data.signature || existingPet?.signature || ""
@@ -3897,7 +3919,7 @@ async function handleForm(form) {
       id: vaccineId,
       petId: data.petId,
       name: String(data.name || "").trim(),
-      dose: String(data.dose || "").trim(),
+      dose: "",
       clinic: String(data.clinic || "").trim(),
       veterinarian: String(data.veterinarian || "").trim(),
       batch: String(data.batch || "").trim(),
@@ -4859,11 +4881,11 @@ function ownerAddress() {
   return [street, state.owner.addressComplement, state.owner.neighborhood, city, state.owner.zipCode].filter(Boolean).join(", ");
 }
 
-function field(label, name, value = "", type = "text", required = false) {
+function field(label, name, value = "", type = "text", required = false, attributes = "") {
   return `
     <div class="field">
       <label for="${name}">${label}</label>
-      <input id="${name}" name="${name}" type="${type}" value="${escapeHTML(value)}" ${required ? "required" : ""} />
+      <input id="${name}" name="${name}" type="${type}" value="${escapeHTML(value)}" ${required ? "required" : ""} ${attributes} />
     </div>
   `;
 }

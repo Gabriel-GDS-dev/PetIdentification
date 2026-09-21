@@ -284,7 +284,7 @@ BEGIN
       question_keys := ARRAY['petWalletInfo', 'vaccines', 'travel'];
       question_labels := ARRAY[
         'As informações do pet na carteirinha precisam ficar mais claras e completas.',
-        'A área de vacinas precisa mostrar melhor dose, data de aplicação, vencimento e clínica.',
+        'A área de vacinas precisa mostrar melhor data de aplicação, vencimento, clínica e status.',
         'A área de viagens precisa organizar melhor checklist, documentos e dados da viagem do pet.'
       ];
     ELSE

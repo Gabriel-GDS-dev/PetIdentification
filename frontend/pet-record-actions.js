@@ -156,7 +156,6 @@ function openVaccineEditor(id) {
         <div class="form-grid two">
           ${petSelectHtml("Pet", "petId", vaccine.petId, pets)}
           ${fieldHtml("Vacina", "name", vaccine.name, "text", true)}
-          ${fieldHtml("Dose", "dose", vaccine.dose)}
           ${fieldHtml("Data da aplicação", "applicationDate", vaccine.applicationDate, "date")}
           ${fieldHtml("Próxima dose", "dueDate", vaccine.dueDate, "date", true)}
           ${fieldHtml("Clínica", "clinic", vaccine.clinic)}
@@ -219,7 +218,7 @@ function savePetRecordForm(form) {
   if (type === "vaccine") {
     const index = (state.vaccines || []).findIndex((item) => item.id === id);
     if (index < 0) return;
-    state.vaccines[index] = { ...state.vaccines[index], ...data };
+    state.vaccines[index] = { ...state.vaccines[index], ...data, dose: "" };
     state.selectedPetId = data.petId;
     savePetState(state);
     return;
