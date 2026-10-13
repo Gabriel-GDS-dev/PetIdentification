@@ -1,0 +1,123 @@
+\begingroup
+\makeatletter
+% Alinha a continuação da legenda ao título, após o número da tabela.
+\@ifundefined{captionsetup}{%
+  \long\def\@makecaption#1#2{%
+    \vskip\abovecaptionskip
+    {\normalsize\normalfont
+      \sbox\@tempboxa{#1\space-\space}%
+      \raggedright
+      \hyphenpenalty=10000
+      \hangindent=\wd\@tempboxa
+      \hangafter=1
+      \noindent#1\space-\space#2\par}%
+    \vskip\belowcaptionskip}%
+}{%
+  \DeclareCaptionLabelSeparator{rdaseparador}{\space-\space}%
+  \captionsetup[table]{format=hang,justification=raggedright,
+    singlelinecheck=false,labelsep=rdaseparador,font=normalsize,
+    labelfont=normalfont,textfont=normalfont,skip=6pt}%
+}
+\makeatother
+
+\section{RESULTADOS E DISCUSSÃO}
+
+Nesta seção são apresentados e discutidos os resultados obtidos na avaliação da aplicação \textbf{Registro Digital Animal}. A validação foi organizada em duas frentes complementares: a execução de testes funcionais de caixa-preta, com observação de aspectos de usabilidade, e a análise qualitativa das percepções coletadas junto a estabelecimentos e profissionais da área veterinária do estado de Santa Catarina. Dessa forma, buscou-se verificar não apenas o funcionamento técnico da solução, mas também sua aderência a necessidades reais do contexto de acompanhamento e identificação de animais.
+
+\subsection{Testes funcionais e avaliação de usabilidade}
+
+Os testes funcionais de caixa-preta foram conduzidos com o objetivo de verificar se as funcionalidades implementadas respondiam adequadamente aos requisitos definidos para o sistema. Foram avaliados os módulos de autenticação, cadastro e edição de animais, integração com APIs externas, geração e visualização da carteira digital em PDF, recursos de geolocalização, suporte a PWA, funcionamento offline e sincronização posterior dos dados.
+
+Para complementar a avaliação técnica, os cenários também foram analisados sob a perspectiva de usabilidade. A classificação adotou a escala de severidade proposta por Nielsen, considerando os seguintes níveis: 0 (não é problema), 1 (problema cosmético), 2 (problema menor), 3 (problema maior) e 4 (problema catastrófico). A Tabela~\ref{tab:testes_funcionais} apresenta os 15 cenários avaliados, seus respectivos resultados e a severidade atribuída.
+
+\begin{table}[htbp]
+\centering
+\caption{Resultados dos testes funcionais e de usabilidade do sistema}
+\label{tab:testes_funcionais}
+\par\vspace{4pt}
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}p{0.07\linewidth} p{\dimexpr0.64\linewidth-6\tabcolsep\relax} p{0.13\linewidth} p{0.16\linewidth}@{}}
+\hline
+\textbf{ID} & \textbf{Cenário de teste avaliado} & \textbf{Resultado} & \textbf{Severidade} \\
+\hline
+F01 & Cadastro de usuário e armazenamento de senha com \textit{hash} & Passou & 0 \\
+F02 & Autenticação do usuário e controle de sessão na API REST & Passou & 0 \\
+F03 & Cadastro e edição de perfil de animal com \textit{upload} de foto & Passou & 0 \\
+F04 & Preenchimento automático de endereço via API ViaCEP a partir do CEP & Passou & 0 \\
+F05 & Captura e salvamento de assinatura digital no formulário & Passou & 0 \\
+F06 & Visualização interativa da carteira digital, com frente e verso & Passou & 0 \\
+F07 & \textit{Upload} e vinculação de documentos clínicos em imagem ou PDF & Passou & 0 \\
+F08 & Geração e exportação da carteira digital consolidada em PDF & Passou & 0 \\
+F09 & Captura de coordenadas de geolocalização via GPS móvel & Passou & 0 \\
+F10 & Consulta de clínicas veterinárias próximas via OpenStreetMap & Passou & 0 \\
+F11 & Responsividade e navegação em \textit{desktop} nos navegadores Chrome e Brave & Passou & 0 \\
+F12 & Acesso móvel em Android via Wi-Fi, ADB e túnel Cloudflare & Passou & 0 \\
+F13 & Armazenamento e execução de \textit{cache} pelo \textit{Service Worker} & Passou & 0 \\
+F14 & Acesso e consulta offline aos dados da carteira e das vacinas & Passou & 0 \\
+F15 & Sincronização offline-online de registros no banco PostgreSQL & Passou & 0 \\
+\hline
+\end{tabular}
+\par\vspace{2pt}
+\begin{minipage}{\linewidth}
+\footnotesize\raggedright
+Fonte: Elaborado pelo autor.
+\end{minipage}
+\end{table}
+
+Conforme apresentado na Tabela~\ref{tab:testes_funcionais}, todos os cenários avaliados foram concluídos com êxito, resultando em taxa de sucesso de 100\% nos testes executados. Nenhum dos cenários recebeu classificação de severidade superior a 0, o que indica que, no ambiente de validação utilizado, não foram observadas falhas funcionais ou problemas de usabilidade capazes de comprometer a execução das tarefas previstas.
+
+Nos cenários F01 e F02, referentes à autenticação e ao controle de acesso, verificou-se que a API REST realizou corretamente o cadastro de usuários, armazenando as senhas em formato de \textit{hash}, sem persistência de credenciais em texto puro. Também foi confirmada a restrição de acesso às rotas protegidas, o que contribui para a segurança dos dados pessoais e dos registros dos animais.
+
+No módulo de gestão do animal, contemplado pelos cenários F03 a F05, o formulário de cadastro apresentou comportamento consistente durante a inserção e edição das informações. A integração com a API ViaCEP reduziu o preenchimento manual de dados de endereço, ao completar automaticamente logradouro, bairro, cidade e estado após a inserção de um CEP válido. A captura da assinatura digital também foi executada corretamente, mantendo a legibilidade do traço e sua associação ao cadastro do animal.
+
+Em relação à carteira digital e aos documentos, avaliados nos cenários F06 a F08, a aplicação permitiu a visualização organizada das informações do animal e do tutor, incluindo a alternância entre frente e verso da carteira. O envio de documentos clínicos em imagem ou PDF funcionou adequadamente, e a exportação consolidada em PDF reuniu os principais dados cadastrais, registros de vacinação, anexos e assinatura digital em um único arquivo. Esse resultado reforça a proposta do sistema como alternativa digital à caderneta física, especialmente em situações nas quais o tutor precisa apresentar rapidamente o histórico do animal.
+
+Os testes de mobilidade e geolocalização, correspondentes aos cenários F09 a F12, demonstraram que a aplicação manteve comportamento estável em diferentes formas de acesso. Em dispositivos Android, a captura de coordenadas por GPS e a integração com o OpenStreetMap possibilitaram a listagem de estabelecimentos veterinários próximos à localização do usuário. Além disso, a execução em rede Wi-Fi local, depuração via ADB e acesso por túnel HTTPS com Cloudflare apresentou funcionamento equivalente, sem inconsistências relevantes de navegação ou renderização da interface.
+
+Por fim, os cenários F13 a F15 validaram os recursos de funcionamento offline e sincronização posterior. O \textit{Service Worker} e os mecanismos de \textit{cache} permitiram que a aplicação permanecesse acessível mesmo na ausência de conexão com a internet, garantindo a consulta às informações essenciais da carteira e dos registros de vacinação já salvos no dispositivo. Quando a conectividade foi restabelecida, os registros pendentes foram enviados à API REST e persistidos no banco PostgreSQL, evidenciando a viabilidade do uso da aplicação em contextos de mobilidade, atendimento externo ou instabilidade de rede.
+
+Embora os resultados tenham sido positivos, ressalta-se que os testes foram realizados em um conjunto controlado de cenários e dispositivos. Assim, avaliações futuras com maior diversidade de usuários, navegadores, modelos de aparelhos e condições de conectividade podem ampliar a confiabilidade da validação e revelar necessidades adicionais de aprimoramento.
+
+\subsection{Pesquisa de campo com profissionais veterinários}
+
+A pesquisa de campo foi realizada com clínicas veterinárias e estabelecimentos do setor no estado de Santa Catarina, por meio de contato remoto via WhatsApp. A seleção dos participantes ocorreu a partir do mapeamento de estabelecimentos no Google Maps, para o município de Criciúma, e na plataforma Casa dos Dados, para os demais municípios catarinenses. O objetivo foi coletar percepções qualitativas sobre a utilidade prática da solução, considerando a rotina de atendimento veterinário, a organização do histórico do animal e a substituição de registros físicos por meios digitais.
+
+A Tabela~\ref{tab:resumo_qualitativo} sintetiza os principais aspectos mencionados pelos participantes durante a avaliação.
+
+\begin{table}[htbp]
+\centering
+\caption{Síntese da avaliação qualitativa recebida dos estabelecimentos veterinários}
+\label{tab:resumo_qualitativo}
+\par\vspace{4pt}
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}p{\dimexpr0.31\linewidth-\tabcolsep\relax} p{\dimexpr0.69\linewidth-\tabcolsep\relax}@{}}
+\hline
+\textbf{Aspecto avaliado} & \textbf{Percepção e observações dos participantes} \\
+\hline
+Organização do histórico & Avaliada de forma positiva, pois contribui para reduzir a perda, o esquecimento ou a rasura de registros vacinais físicos por parte dos tutores. \\
+Praticidade e acessibilidade & Considerada adequada pela facilidade de consulta das informações no celular, tanto em atendimentos de rotina quanto em situações de urgência. \\
+Funcionamento offline & Destacado como recurso relevante para deslocamentos, eventos externos, áreas com instabilidade de sinal e momentos em que a clínica não dispõe de conexão confiável. \\
+Carteira em PDF e assinatura digital & Apontada como funcionalidade útil para apresentação do histórico de vacinas em viagens, hospedagens, atendimentos e demais situações que exijam comprovação documental. \\
+Sugestões de aprimoramento & Recomendada a inclusão futura de alertas de retorno, lembretes automáticos de próximas doses e notificações relacionadas ao acompanhamento preventivo do animal. \\
+\hline
+\end{tabular}
+\par\vspace{2pt}
+\begin{minipage}{\linewidth}
+\footnotesize\raggedright
+Fonte: Elaborado pelo autor.
+\end{minipage}
+\end{table}
+
+Os retornos obtidos indicam boa aceitação da proposta do \textbf{Registro Digital Animal}, especialmente pela possibilidade de centralizar em um único ambiente informações que, no modelo tradicional, costumam ficar dispersas em cadernetas físicas, comprovantes impressos, mensagens e documentos avulsos. O ponto mais enfatizado pelos participantes foi a organização do histórico vacinal, uma vez que a perda ou o esquecimento da caderneta física é uma ocorrência recorrente no atendimento veterinário.
+
+A disponibilidade da aplicação em formato PWA também foi percebida como um diferencial, pois dispensa instalação por lojas de aplicativos e permite acesso direto pelo navegador ou por atalho na tela inicial do dispositivo. Esse aspecto favorece a adoção por tutores com diferentes níveis de familiaridade tecnológica, além de facilitar o acesso em situações de consulta, emergência, viagem ou hospedagem pet.
+
+Outro ponto relevante foi a exportação da carteira em PDF, associada à assinatura digital e aos anexos clínicos. Essa funcionalidade aproxima o sistema de uma documentação mais completa e compartilhável, permitindo que o tutor apresente informações consolidadas quando solicitado. Na perspectiva dos profissionais consultados, esse recurso pode contribuir para reduzir falhas de comunicação entre tutor, clínica, hospedagem, transporte e demais serviços relacionados ao cuidado animal.
+
+As sugestões de aprimoramento concentraram-se principalmente na inclusão de lembretes automáticos de vacinação e alertas de retorno. Essa recomendação evidencia que, além de registrar informações, o sistema pode evoluir para apoiar o acompanhamento preventivo do animal, auxiliando tutores e profissionais na manutenção de cuidados recorrentes. Portanto, os resultados da pesquisa de campo reforçam a relevância prática da solução e apontam caminhos para futuras versões da aplicação.
+
+\endgroup

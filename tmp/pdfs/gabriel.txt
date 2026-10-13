@@ -1,0 +1,622 @@
+
+
+--- PAGE 1 ---
+REGISTRO DIGITAL ANIMAL: DIGITALIZANDO A IDENTIFICAÇÃO E
+CONTROLE DE VACINAÇÃO DE ANIMAIS DE ESTIMAÇÃO
+Gabriel Goulart de Souza1, Diorgines Mattos Machado2, Allan Farias
+Favaro3
+Resumo: Deve ter uma sequência de frases concisas e objetivas em pará-
+grafo único, sem enumeração de tópicos, de 100 a 250 palavras, seguido,
+logo abaixo, das palavras representativas do conteúdo do trabalho, isto é,
+palavras-chave e/ou descritores, conforme a ABNT (2021).
+Palavras-chave: Elemento obrigatório. Devem ser separadas entre si por
+ponto e vírgula e finalizadas por ponto, com as iniciais em letra minúscula,
+com exceção dos substantivos próprios e nomes científicos.
+ABSTRACT: Tradução do resumo em língua vernácula para outro idioma
+de propagação internacional (em inglês ABSTRACT, em francês RESUMÉ,
+em espanhol RESUMEN).
+Keywords: keyword 1; keyword 2; keyword 3.
+1 INTRODUÇÃO
+A relação entre humanos e animais de estimação apresentou
+mudanças significativas nas últimas décadas, consolidando o conceito de
+família multiespécie, no qual os animais passaram a ocupar uma posição
+relevante no núcleo familiar (Bolson; Bolson, 2022). Essa transformação
+ampliou a preocupação dos tutores com a saúde, o bem-estar e a qualidade
+de vida dos animais, aumentando também a necessidade de acompanha-
+mento das informações relacionadas à sua identificação e às condições de
+saúde (Moraes et al., 2024). Nesse contexto, recursos tecnológicos passa-
+ram a representar alternativas para auxiliar na organização e no acesso às
+informações necessárias ao cuidado dos animais de estimação. A identifi-
+cação individual também contribui para o acompanhamento de informações
+1Curso de Ciência da Computação, Universidade do Extremo Sul Catarinense (Unesc),
+Criciúma - Santa Catarina - Brasil. gabriel.gsouzza6@unesc.net
+2Coorientador(a), Curso de Ciência da Computação, Universidade do Extremo Sul Catari-
+nense (Unesc), Criciúma - Santa Catarina - Brasil. diorginesmattos@unesc.net
+3Orientador(a), Curso de Ciência da Computação, Universidade do Extremo Sul Catari-
+nense (Unesc), Criciúma - Santa Catarina - Brasil. allanfavaro@gmail.com
+
+--- PAGE 2 ---
+relacionadas ao comportamento, à saúde e ao bem-estar dos animais (Vi-
+dal et al., 2021).
+Entre os dados que exigiram acompanhamento contínuo, destacaram-
+se os registros de vacinação, exames, consultas, medicamentos e demais
+documentos relacionados à saúde animal. O controle dessas informações
+apresenta importância tanto para o acompanhamento individual quanto para
+ações preventivas relacionadas a doenças infecciosas e zoonoses, uma
+vez que a identificação e a rastreabilidade dos animais auxiliam no moni-
+toramento e no controle de doenças (Murphy et al., 2008). A vacinação
+constitui uma das principais medidas para prevenção e controle dessas do-
+enças, incluindo a raiva, que possui relevância para a saúde pública (Mou-
+tinho et al., 2018). Assim, a manutenção de registros atualizados favorece
+o acompanhamento preventivo e a consulta ao histórico do animal quando
+necessária.
+Apesar dessa importância, o registro dessas informações ainda
+ocorre, em muitos casos, por meio de documentos físicos, como caderne-
+tas de vacinação e fichas em papel. Esse modelo apresenta limitações
+relacionadas à conservação e à disponibilidade dos dados, uma vez que
+documentos físicos estão sujeitos a perdas, danos, rasuras e deterioração
+(Bolson; Bolson, 2022). A consulta também pode ser dificultada quando o
+histórico do animal é solicitado em situações como atendimentos veteriná-
+rios, viagens ou emergências. Dessa maneira, a dependência de documen-
+tos físicos representa uma limitação para a continuidade e a disponibilidade
+das informações de saúde.
+A digitalização dos registros surge como uma alternativa para
+reduzir essas limitações, possibilitando o armazenamento estruturado e a
+consulta das informações por meio de dispositivos digitais. No contexto da
+saúde animal, essa abordagem permitiu organizar dados clínicos e vacinais
+e facilitar seu acesso em diferentes ambientes (Vieira; Mossoi, 2020). A
+experiência com registros digitais de vacinação em saúde humana também
+evidencia possibilidades de organização e acesso às informações, servindo
+como referência para sua adaptação ao contexto animal (Martins, 2024). A
+utilização de dispositivos móveis também ampliou a disponibilidade des-
+sas informações, tornando possível consultar os registros sem depender
+exclusivamente da posse de documentos físicos (Rodrigues; Costa; Soler,
+2022).
+Nesse contexto, algumas soluções foram desenvolvidas com o
+objetivo de digitalizar e organizar informações relacionadas à saúde dos
+2
+
+--- PAGE 3 ---
+animais. Uma dessas abordagens consistiu na utilização de prontuários
+eletrônicos veterinários, que possibilitaram o armazenamento e o gerenci-
+amento de informações clínicas em ambiente digital. Essa alternativa de-
+monstrou a viabilidade da substituição dos registros físicos por sistemas in-
+formatizados, contribuindo para a organização e recuperação das informa-
+ções relacionadas ao histórico dos animais (Iskandar; Ismawatie; Ibrahim,
+2023). Entretanto, soluções dessa natureza estiveram direcionadas princi-
+palmente ao ambiente de clínicas veterinárias, enquanto a proposta deste
+trabalho esteve voltada ao uso cotidiano realizado diretamente pelo tutor.
+Também foram desenvolvidas plataformas destinadas à centrali-
+zação de diferentes informações e serviços relacionados aos animais. Es-
+sas soluções contemplaram recursos como cadastro de animais, controle
+de vacinação e outras funcionalidades relacionadas aos cuidados veteri-
+nários, demonstrando a possibilidade de reunir diferentes tipos de infor-
+mações em um único ambiente digital (Vieira et al., 2025). Apesar dessa
+aproximação com a proposta apresentada neste trabalho, permaneceram
+oportunidades relacionadas à mobilidade, à disponibilidade das informa-
+ções em diferentes dispositivos e ao acesso aos registros em situações
+sem conexão com a internet.
+Outra abordagem relacionada à identificação de animais utilizou
+tecnologias de comunicação por aproximação, permitindo associar infor-
+mações digitais ao animal e facilitar sua identificação. Esse tipo de solução
+demonstrou o potencial da utilização de tecnologias digitais para comple-
+mentar os métodos tradicionais de identificação e facilitar o acesso a in-
+formações importantes (Sartori; Medeiros, 2018). A rastreabilidade com-
+plementa esse processo ao permitir o acompanhamento de informações
+sobre o histórico do animal, incluindo sua origem, movimentações e regis-
+tros sanitários (Zhao et al., 2020). Entretanto, a utilização de tecnologias
+específicas de identificação não contempla, isoladamente, a necessidade
+de centralizar informações de vacinação, documentos clínicos e outros re-
+gistros utilizados no acompanhamento cotidiano do animal.
+A análise dessas propostas demonstrou que já existiam alter-
+nativas destinadas à digitalização de informações veterinárias, ao controle
+de vacinação e à identificação de animais. Entretanto, as soluções apre-
+sentadas possuíam diferentes focos e limitações. Algumas estiveram di-
+recionadas principalmente ao ambiente profissional das clínicas veteriná-
+rias, enquanto outras concentraram-se em funcionalidades específicas de
+identificação ou gerenciamento. Dessa forma, informações relacionadas à
+3
+
+--- PAGE 4 ---
+identificação, vacinação e histórico de saúde ainda poderiam permanecer
+distribuídas entre documentos físicos, estabelecimentos veterinários e dife-
+rentes sistemas.
+Diante desse cenário, identificou-se uma lacuna relacionada à
+disponibilidade de uma solução integrada e acessível, direcionada ao uso
+cotidiano do tutor e capaz de reunir informações essenciais de identificação
+e saúde animal em um único ambiente. A lacuna observada não esteve re-
+lacionada somente à substituição dos registros físicos por arquivos digitais,
+mas à necessidade de concentrar essas informações de maneira organi-
+zada e acessível, sem exigir equipamentos especializados ou tecnologias
+de elevada complexidade.
+Para atender a essa necessidade, este trabalho apresenta uma
+aplicação multiplataforma baseada no conceito de Progressive Web App
+(PWA). Essa abordagem permitiu combinar o acesso por navegadores,
+a possibilidade de instalação no dispositivo e mecanismos de armazena-
+mento local. O emprego de recursos de cache e Service Workers possibi-
+litou o acesso a informações essenciais mesmo em situações de ausência
+de conexão com a internet, característica considerada relevante para situ-
+ações nas quais o tutor necessitasse consultar os dados do animal fora de
+seu ambiente habitual.
+A aplicação desenvolvida concentrou informações relacionadas
+ao cadastro dos animais, vacinação e documentos clínicos, buscando re-
+duzir a dispersão dos registros. A solução foi estruturada segundo uma
+arquitetura cliente-servidor, com uma aplicação PWA no frontend, uma API
+REST responsável pelo processamento das requisições e um banco de da-
+dos relacional PostgreSQL 18, hospedado e gerenciado na plataforma Ren-
+der por meio do serviço Render Postgres, destinado ao armazenamento
+persistente das informações. Essa estrutura permitiu aplicar conceitos de
+desenvolvimento multiplataforma, arquitetura de sistemas e modelagem re-
+lacional de bancos de dados ao problema identificado.
+Além da organização das informações, a proposta considerou a
+utilização da aplicação em diferentes dispositivos. A interface foi desenvol-
+vida para ambientes desktop e móveis, permitindo a consulta dos registros
+em diferentes situações. Dessa forma, a solução buscou atender tanto à ne-
+cessidade de armazenamento organizado quanto à necessidade de acesso
+prático às informações relacionadas ao animal.
+A relevância do estudo esteve, portanto, na aplicação de recur-
+sos computacionais para tratar uma dificuldade presente no gerenciamento
+4
+
+--- PAGE 5 ---
+cotidiano da saúde animal. A digitalização dos registros permitiu reduzir
+a dependência de documentos físicos e reunir informações que anterior-
+mente poderiam estar distribuídas em diferentes meios. Além disso, a uti-
+lização de uma arquitetura PWA e de mecanismos de persistência local
+possibilitou explorar uma alternativa adequada ao acesso por dispositivos
+utilizados no cotidiano.
+Dessa forma, o trabalho desenvolveu e avaliou uma aplicação
+multiplataforma denominada Registro Digital Animal, destinada ao regis-
+tro digital de vacinação e identificação de animais de estimação. A proposta
+integrou informações essenciais de saúde e identificação em um único am-
+biente, buscando proporcionar maior organização e facilidade de consulta
+aos tutores. O desenvolvimento também contemplou mecanismos de fun-
+cionamento offline, permitindo o acesso a informações essenciais mesmo
+na ausência de conectividade.
+O objetivo geral deste trabalho foi avaliar uma aplicação multipla-
+taforma para registro digital de vacinação e identificação animal, buscando
+reduzir a dependência de registros físicos e facilitar o acesso às informa-
+ções de saúde dos animais.
+2 MATERIAIS E MÉTODOS
+Esta pesquisa caracterizou-se como aplicada, pois teve como
+finalidade o desenvolvimento de uma solução tecnológica voltada à resolu-
+ção de um problema prático relacionado ao gerenciamento de informações
+de saúde e identificação de animais de estimação. Quanto à abordagem,
+o estudo possuiu caráter qualitativo, visto que a construção da solução foi
+conduzida a partir da análise detalhada das necessidades dos usuários,
+das funcionalidades previstas e da escolha das tecnologias mais adequa-
+das. Em relação aos objetivos, a pesquisa classificou-se como exploratória
+e descritiva, pois investigou as tecnologias empregadas na digitalização de
+registros veterinários e descreveu minuciosamente o processo de desen-
+volvimento e modelagem da aplicação proposta.
+O método adotado foi fundamentado na Design Science Rese-
+arch (DSR), abordagem voltada à concepção, construção e avaliação de ar-
+tefatos tecnológicos destinados à solução de problemas reais e relevantes.
+Neste estudo, o artefato resultante foi uma aplicação multiplataforma deno-
+minada Registro Digital Animal, projetada para o cadastro, armazenamento
+e consulta eficiente de informações vacinais, clínicas e de identificação de
+animais de estimação.
+5
+
+--- PAGE 6 ---
+2.1 DESENVOLVIMENTO DO SISTEMA
+O sistema foi desenvolvido com arquitetura cliente-servidor, se-
+parando a interface de interação com o usuário, o processamento das re-
+quisições e o armazenamento dos dados. O código-fonte da aplicação e os
+scripts de ambiente foram disponibilizados em repositório público4. O fron-
+tend foi implementado como uma Progressive Web App (PWA), permitindo
+acesso por navegadores em computadores e dispositivos móveis, além de
+possibilitar a instalação no dispositivo do usuário por meio do arquivo de
+manifesto e do service worker. Essa escolha foi realizada para favorecer a
+portabilidade da aplicação e permitir o uso em diferentes contextos, como
+consultas veterinárias, viagens e situações de emergência.
+O backend foi estruturado como uma API REST, responsável
+pelo processamento das requisições, autenticação dos usuários, comuni-
+cação com o banco de dados e controle das informações cadastradas. A
+aplicação também utilizou mecanismos de armazenamento local e sincroni-
+zação offline com rota de sincronização dedicada para manter disponíveis
+os registros essenciais mesmo em momentos de ausência de conexão com
+a internet. Em ambiente de produção, a aplicação foi hospedada na plata-
+forma Render, responsável pela execução do serviço da aplicação e pela
+disponibilização da API por meio de um Web Service. O banco de dados
+foi hospedado separadamente por meio do Render Postgres, permitindo
+que a aplicação e o banco de dados fossem mantidos na mesma infraes-
+trutura de nuvem. A comunicação entre o serviço da aplicação e o banco
+foi configurada por variáveis de ambiente, incluindo a cadeia de conexão
+do PostgreSQL, evitando que credenciais de acesso fossem armazenadas
+diretamente no código-fonte. Durante o desenvolvimento e os testes locais,
+também foi utilizada a possibilidade de exposição temporária do servidor
+por meio de túnel HTTPS com Cloudflare.
+2.1.1 Arquitetura e Tecnologias do Sistema
+O sistema Registro Digital Animal foi desenvolvido com arquite-
+tura cliente-servidor, separando a interface de interação com o usuário, o
+processamento das requisições e a persistência dos dados. Essa organi-
+zação foi composta por uma Progressive Web App (PWA) no frontend, uma
+API REST no backend e um banco de dados relacional PostgreSQL 18,
+além de serviços externos empregados em funcionalidades específicas da
+4Disponível em: <https://github.com/Gabriel-GDS-dev/PetIdentification>. Acesso em: 31
+ago. 2026.
+6
+
+--- PAGE 7 ---
+aplicação.
+A organização geral dos componentes e do fluxo de funciona-
+mento da aplicação é apresentada na Figura 1. O fluxograma sintetiza a
+interação entre o usuário, a interface da aplicação, os serviços responsá-
+veis pelo processamento das requisições, o banco de dados e os recursos
+externos integrados ao sistema.
+Figura 1 - Fluxograma da arquitetura e do funcionamento do sistema
+Registro Digital Animal
+Fonte: Elaborado pelo autor com auxílio do Codex GPT-5.5 (2026).
+No fluxo apresentado, o tutor acessa a aplicação por um navega-
+dor ou pela PWA instalada no dispositivo. As ações realizadas na interface
+são encaminhadas à API REST, responsável por processar as requisições,
+aplicar as regras do sistema e realizar as operações necessárias no banco
+de dados. As integrações externas são acionadas conforme a funcionali-
+dade utilizada, enquanto os mecanismos de armazenamento local e sincro-
+nização permitem manter informações essenciais disponíveis em situações
+de conectividade limitada ou ausente.
+Além do fluxo funcional, a Figura 2 apresenta uma visão con-
+solidada das tecnologias empregadas no desenvolvimento, na implantação
+7
+
+--- PAGE 8 ---
+e nos testes do sistema. O diagrama organiza os recursos utilizados nas
+camadas de frontend, PWA e funcionamento offline, backend, banco de
+dados, infraestrutura de hospedagem, integrações externas e ambiente de
+testes.
+Figura 2 - Arquitetura e tecnologias utilizadas no sistema Registro Digital
+Animal
+Fonte: Elaborado pelo autor.
+No frontend, foram utilizados HTML5, CSS3 e JavaScript puro,
+enquanto os recursos de PWA foram implementados por meio de mani-
+festo, service worker, cache e armazenamento local. O backend foi desen-
+volvido em JavaScript sobre o ambiente Node.js e organizado como uma
+API REST, com o NPM utilizado no gerenciamento das dependências e na
+execução dos scripts do projeto. A persistência das informações foi reali-
+zada no PostgreSQL 18, hospedado no Render Postgres, e a aplicação foi
+disponibilizada por meio de um Render Web Service.
+As integrações externas incluíram a API ViaCEP, utilizada no pre-
+enchimento automático de endereços, e os recursos de GPS e OpenStreet-
+Map, empregados na localização de clínicas veterinárias próximas ao tutor.
+Durante o desenvolvimento e os testes, foram utilizados o sistema ope-
+racional Windows, os navegadores Google Chrome e Brave, dispositivos
+Android, rede local Wi-Fi, Android Debug Bridge (ADB) e túnel HTTPS da
+Cloudflare.
+A aplicação foi composta por módulos voltados ao gerenciamento
+das informações do tutor e do animal. O módulo de usuários permitiu o ca-
+8
+
+--- PAGE 9 ---
+dastro e a autenticação na plataforma via API com senhas armazenadas
+em formato de hash. O módulo de animais possibilitou registrar e editar os
+dados de identificação do pet, incluindo o upload de foto e o preenchimento
+automático do endereço a partir da consulta do CEP por meio da API Via-
+CEP, permanecendo sob responsabilidade do usuário o preenchimento do
+número e do complemento.
+Além disso, o sistema contou com uma carteira digital do animal
+visualizável em formato frente e verso, recursos para captura de assinatura
+digital diretamente na aplicação, upload de documentos do pet em formato
+de imagem ou PDF e geração ou download da carteira e de seus anexos
+compilados em formato PDF. Para auxiliar em situações de emergência e
+localização, a aplicação integrou a geolocalização por GPS do tutor e os
+dados do OpenStreetMap para listar clínicas veterinárias próximas.
+2.1.2 Ambiente de Desenvolvimento
+Para o desenvolvimento da aplicação, utilizou-se um computa-
+dor com sistema operacional Windows operado via terminal de comandos.
+Os testes em ambiente móvel foram realizados em dispositivos Android co-
+nectados via rede local Wi-Fi, por depuração USB com suporte ao Android
+Debug Bridge (ADB) e mediante acesso remoto com o serviço de túnel se-
+guro Cloudflare, com o objetivo de verificar a responsividade, a navegação
+e o comportamento do PWA e do GPS nos dispositivos móveis em diferen-
+tes cenários de conectividade.
+Quanto aos recursos de software, empregou-se o Node.js como
+ambiente de execução do backend, permitindo a execução do código Ja-
+vaScript responsável pela API e pelo processamento das requisições re-
+cebidas pelo servidor. O NPM foi utilizado como gerenciador de pacotes
+na raiz e nos subsistemas do projeto, sendo responsável pela instalação
+e pelo gerenciamento das dependências, bem como pela execução dos
+scripts utilizados durante o desenvolvimento e a inicialização da aplicação.
+O frontend foi implementado utilizando HTML5, CSS3 e JavaS-
+cript puro. O HTML5 foi responsável pela estruturação semântica das pá-
+ginas e dos elementos apresentados ao usuário, enquanto o CSS3 foi em-
+pregado na definição da aparência visual, responsividade e adaptação da
+interface para diferentes dimensões de tela. O JavaScript foi utilizado para
+implementar a lógica de interação da interface, manipulação dos dados,
+comunicação com a API REST e atualização dinâmica dos componentes
+exibidos ao usuário.
+9
+
+--- PAGE 10 ---
+A aplicação foi estruturada como uma Progressive Web App, uti-
+lizando um arquivo de manifesto para definir informações necessárias à
+instalação da aplicação no dispositivo e um service worker para controlar
+recursos relacionados ao armazenamento em cache, carregamento de ar-
+quivos e funcionamento em situações de conectividade limitada ou ausente.
+Esses mecanismos permitiram disponibilizar localmente partes da aplica-
+ção e dados necessários ao funcionamento offline, que posteriormente pu-
+deram ser sincronizados com o servidor.
+Para o armazenamento persistente dos dados, utilizou-se o Post-
+greSQL 18, sistema gerenciador de banco de dados relacional baseado em
+tabelas, registros, relacionamentos e restrições de integridade. O banco de
+dados foi hospedado e gerenciado em nuvem por meio do serviço Render
+Postgres. A comunicação entre a API e o banco de dados foi configurada
+por meio de parâmetros e variáveis de ambiente, especialmente a cadeia
+de conexão disponibilizada pelo Render, enquanto as operações de inser-
+ção, consulta, atualização, exclusão e sincronização foram controladas pelo
+backend.
+A aplicação em ambiente de produção também foi hospedada
+na plataforma Render por meio de um Web Service, responsável por exe-
+cutar o ambiente Node.js e disponibilizar a aplicação e suas rotas de API
+para acesso externo. A configuração do serviço incluiu as variáveis de am-
+biente necessárias ao funcionamento da aplicação e à comunicação com o
+banco PostgreSQL. Dessa forma, a infraestrutura de produção concentrou
+na plataforma Render tanto a execução do serviço da aplicação quanto a
+persistência dos dados por meio do Render Postgres.
+Os testes de interface e funcionamento foram executados em
+navegadores modernos, como Google Chrome e Brave.
+2.1.3 Banco de Dados
+O banco de dados da aplicação foi implementado utilizando o
+PostgreSQL 18, um sistema gerenciador de banco de dados relacional.
+Para a disponibilização e o gerenciamento do banco em nuvem, utilizou-se
+o Render Postgres, serviço de banco de dados gerenciado da plataforma
+Render, responsável por fornecer a infraestrutura necessária ao armazena-
+mento persistente das informações da aplicação. A comunicação entre o
+backend e o banco de dados foi realizada por meio de uma cadeia de co-
+nexão configurada nas variáveis de ambiente da aplicação, permitindo que
+informações como endereço do servidor, porta, nome do banco, usuário e
+10
+
+--- PAGE 11 ---
+credenciais de acesso permanecessem separadas do código-fonte.
+Diferentemente do modelo orientado a documentos anteriormente
+utilizado, a estrutura de dados foi organizada no PostgreSQL por meio de
+tabelas compostas por linhas e colunas. Cada tabela representa uma enti-
+dade ou conjunto específico de informações da aplicação, enquanto chaves
+primárias são utilizadas para identificar unicamente os registros e relacio-
+namentos entre tabelas permitem associar informações pertencentes a um
+mesmo usuário ou animal. Quando necessário armazenar estruturas com
+formato variável, como estados de sincronização e determinados conjuntos
+de informações auxiliares, foram utilizados campos do tipo JSONB, preser-
+vando a possibilidade de armazenamento estruturado de dados sem aban-
+donar o modelo relacional.
+Entre as estruturas presentes no banco encontram-se tabelas
+destinadas ao cadastro e à autenticação dos usuários, informações dos tu-
+tores, cadastro dos animais, registros de vacinação, documentos, anexos
+da carteira digital, planejamento de viagens, sincronização entre armaze-
+namento local e servidor e coleta de respostas de avaliação da aplicação.
+As tabelas utilizam identificadores para relacionar registros, como os cam-
+pos associados ao usuário e ao animal, possibilitando garantir que vacinas,
+documentos, anexos e demais informações permaneçam vinculados aos
+respectivos registros principais.
+A tabela relacionada aos usuários mantém as informações ne-
+cessárias ao cadastro e à autenticação na aplicação, incluindo nome, en-
+dereço de e-mail, telefone e informações relacionadas ao armazenamento
+seguro da senha. Os dados específicos do tutor são mantidos em estrutura
+própria, contemplando informações pessoais, endereço, contatos e dados
+utilizados em situações de emergência. Os animais também possuem re-
+gistros próprios, contendo características de identificação como nome, es-
+pécie, raça, sexo, data de nascimento, peso, cor, microchip, registro, tem-
+peramento, alergias e demais observações.
+Os registros de vacinação são associados ao respectivo animal
+por meio de identificadores, permitindo armazenar informações como nome
+da vacina, dose, data de aplicação, data prevista para a próxima dose, clí-
+nica, veterinário, lote e observações. De maneira semelhante, documen-
+tos e anexos permanecem relacionados ao usuário e ao animal correspon-
+dente, possibilitando que os arquivos e suas informações de identificação
+sejam recuperados posteriormente pela carteira digital.
+Também foram mantidas estruturas destinadas ao funcionamento
+11
+
+--- PAGE 12 ---
+offline da aplicação. Os estados da carteira e os dados utilizados durante
+a sincronização podem ser armazenados no banco para possibilitar a com-
+paração entre as informações existentes no dispositivo e aquelas presen-
+tes no servidor. Dessa maneira, alterações realizadas durante períodos
+sem conexão podem ser posteriormente transmitidas à API e persistidas
+no PostgreSQL quando a conectividade for restabelecida.
+A Figura 3 apresenta o diagrama do banco de dados utilizado
+pela aplicação, incluindo as tabelas, os campos armazenados, os tipos de
+dados, as chaves e os relacionamentos existentes entre as estruturas.
+Figura 3 - Diagrama relacional do banco de dados PostgreSQL da
+aplicação Registro Digital Animal
+Fonte: Elaborado pelo autor.
+O modelo apresentado no diagrama demonstra a organização
+relacional empregada pela aplicação. Os identificadores utilizados como
+chaves permitem estabelecer associações entre usuários, tutores, animais,
+12
+
+--- PAGE 13 ---
+vacinas, documentos, anexos, planos de viagem e estruturas relacionadas
+à sincronização. Dessa forma, informações pertencentes a um mesmo ani-
+mal podem ser recuperadas de diferentes tabelas sem a necessidade de
+duplicar todos os seus dados em cada registro.
+A utilização do PostgreSQL também possibilitou definir tipos es-
+pecíficos para os dados armazenados, incluindo textos, números inteiros,
+datas, valores booleanos, campos de data e hora com fuso horário e estru-
+turas JSONB. Essa definição contribuiu para manter consistência entre os
+valores persistidos e as informações manipuladas pela aplicação. Os re-
+lacionamentos e identificadores presentes no modelo permitiram organizar
+os dados de maneira estruturada e manter a associação entre os diferentes
+módulos da aplicação.
+As operações de criação, consulta, atualização e exclusão dos
+registros foram realizadas pela API REST, que atuou como intermediária
+entre a interface da aplicação e o PostgreSQL hospedado no Render Post-
+gres. Dessa forma, o frontend não acessou diretamente o banco de da-
+dos. As requisições foram encaminhadas à API, responsável por processar
+os dados recebidos, executar as operações correspondentes no banco e
+retornar as respostas necessárias à interface. Essa separação permitiu
+centralizar no backend as regras relacionadas à persistência, autenticação,
+validação e sincronização das informações.
+2.2 METODOLOGIA DE AVALIAÇÃO
+A avaliação da aplicação foi organizada em duas etapas comple-
+mentares. A primeira correspondeu aos testes funcionais de caixa-preta e
+à verificação de aspectos de usabilidade do sistema. A segunda consistiu
+em uma pesquisa de campo com estabelecimentos e profissionais da área
+veterinária do estado de Santa Catarina, com o objetivo de obter avaliações
+externas sobre a aplicação Registro Digital Animal.
+2.2.1 Testes funcionais de caixa-preta e usabilidade
+Os testes funcionais foram conduzidos por meio de abordagem
+de caixa-preta, na qual os comportamentos do sistema foram avaliados a
+partir das entradas fornecidas, das ações executadas e das respostas apre-
+sentadas pela aplicação, sem análise direta da estrutura interna do código.
+O objetivo dessa etapa foi verificar se as funcionalidades implementadas
+estavam operando de acordo com os requisitos definidos para a aplicação.
+Foram avaliados o cadastro e a autenticação de usuários, inclu-
+13
+
+--- PAGE 14 ---
+indo o armazenamento seguro das senhas por meio de hash; o cadastro e
+a edição dos animais; a integração com o ViaCEP; a busca de estabeleci-
+mentos veterinários por meio de GPS e OpenStreetMap; a visualização da
+carteira digital; a geração da carteira em PDF; o upload de documentos e
+fotografias; a captura de assinatura digital; a sincronização de dados entre
+os modos offline e online por meio da API; e a adaptação da interface PWA
+aos ambientes desktop e móvel.
+Os testes foram executados em etapas. Inicialmente, verificaram-
+se o cadastro de usuários, o hash de senhas e a autenticação na API. Em
+seguida, testaram-se o cadastro dos animais, a busca automática de en-
+dereço por CEP e a inclusão de foto e assinatura digital. Na sequência,
+avaliaram-se o visualizador da carteira digital em frente e verso, o envio
+de documentos em formato de imagem ou PDF e a exportação da carteira
+compilada em PDF.
+Também foi analisado o comportamento da aplicação em dis-
+positivos móveis Android sob três modalidades de acesso: rede local Wi-
+Fi, conexão por cabo USB com suporte ao Android Debug Bridge (ADB)
+e acesso externo por meio de túnel HTTPS da Cloudflare. Em todas as
+abordagens, verificou-se o funcionamento das rotas, a responsividade da
+interface e a captura de coordenadas GPS para a busca de veterinárias
+próximas via OpenStreetMap.
+Por fim, testou-se a funcionalidade de persistência e sincroniza-
+ção dos dados offline com o banco PostgreSQL 18 hospedado no Render
+Postgres, verificando se as alterações realizadas localmente eram enviadas
+e armazenadas corretamente quando a conexão com a internet e o servidor
+retornavam à disponibilidade.
+Para cada funcionalidade, foram considerados cenários de utili-
+zação normal e situações de erro. A avaliação também contemplou aspec-
+tos de usabilidade, como clareza das telas, facilidade de localização das
+informações, organização dos elementos da carteira digital, compreensão
+dos formulários e prevenção de inconsistências durante o preenchimento
+dos dados.
+2.2.2 Avaliação com profissionais da área veterinária
+Além dos testes realizados diretamente no sistema, foi iniciada
+uma pesquisa de campo com clínicas veterinárias e outros estabelecimen-
+tos relacionados à área veterinária. Essa etapa buscou aproximar a avali-
+ação da aplicação de um contexto real de utilização, permitindo coletar a
+14
+
+--- PAGE 15 ---
+opinião de profissionais que possuem contato cotidiano com tutores, ani-
+mais, registros de vacinação, documentos clínicos e demais informações
+contempladas pelo aplicativo.
+A identificação dos estabelecimentos participantes foi realizada
+por meio de duas estratégias de busca. Para o município de Criciúma,
+Santa Catarina, foram localizadas clínicas veterinárias utilizando o Google
+Maps, com o objetivo de identificar estabelecimentos da região e obter in-
+formações públicas de contato disponibilizadas pelos próprios negócios.
+Com o objetivo de ampliar a abrangência geográfica da pesquisa
+para além de Criciúma, também foram realizadas buscas por estabeleci-
+mentos localizados em outras regiões do estado de Santa Catarina. Para
+essa etapa, foi utilizada a ferramenta de pesquisa avançada disponibilizada
+pelo site Casa dos Dados, permitindo identificar potenciais participantes em
+diferentes municípios catarinenses.
+A seleção dos participantes não teve como finalidade produzir
+uma amostra probabilística representativa de todos os estabelecimentos
+veterinários do estado, mas obter avaliações de profissionais e empresas
+diretamente relacionados ao domínio de aplicação do sistema, capazes de
+fornecer contribuições técnicas e práticas para o aprimoramento da solução
+desenvolvida.
+Após a identificação dos estabelecimentos e a obtenção das in-
+formações públicas de contato, a abordagem foi realizada remotamente por
+meio do aplicativo WhatsApp. O contato inicial apresentou o pesquisador,
+informou que a aplicação estava sendo desenvolvida como parte de um
+Trabalho de Conclusão de Curso do curso de Ciência da Computação e ex-
+plicou, de forma resumida, o objetivo do sistema e da avaliação proposta.
+Aos estabelecimentos que demonstraram disponibilidade para
+participar da avaliação, foram encaminhadas orientações para acesso ao
+sistema e material explicativo destinado a demonstrar o funcionamento da
+aplicação. Após a apresentação e experimentação da aplicação, os par-
+ticipantes foram convidados a fornecer seu feedback pelo próprio contato
+realizado via WhatsApp.
+A avaliação buscou identificar a percepção dos profissionais em
+relação à utilidade das funcionalidades existentes, à organização das in-
+formações apresentadas, à adequação dos registros disponibilizados aos
+tutores e à possível existência de dados ou recursos considerados impor-
+tantes para a rotina relacionada aos cuidados veterinários que ainda não
+estivessem contemplados pelo aplicativo.
+15
+
+--- PAGE 16 ---
+Também foram consideradas sugestões de novas funcionalida-
+des, alterações nos campos existentes, modificações na apresentação das
+informações e observações relacionadas à utilização prática da aplicação.
+Dessa forma, a participação dos profissionais não se limitou à confirmação
+do funcionamento técnico do sistema, mas buscou obter uma avaliação
+qualitativa baseada na experiência dos participantes com atividades relaci-
+onadas à saúde e ao atendimento de animais de estimação.
+No momento de realização deste trabalho, a pesquisa de campo
+ainda se encontra em andamento. Após o encerramento da etapa de co-
+leta, os feedbacks obtidos serão organizados de acordo com os principais
+aspectos avaliados, permitindo identificar recorrências, sugestões de me-
+lhoria, funcionalidades consideradas relevantes e possíveis limitações ob-
+servadas pelos participantes.
+3 RESULTADOS E DISCUSSÃO
+4 CONCLUSÃO
+REFERÊNCIAS
+ASSOCIAÇÃO BRASILEIRA DE NORMAS TECNICAS. NBR 6028:
+Informação e documentação - resumo - apresentação: Nbr 6028. Rio de
+Janeiro, 2021.
+BOLSON, S. H.; BOLSON, S. H. A antropomorfização dos animais
+domésticos e o registro de "nascimento"e guarda em cartório
+como (mais) uma expressão da família multiespécie. Revista
+Vertentes do Direito, v. 9, n. 1, p. 367–390. 2022, Disponível em: <https:
+//www-periodicos-capes-gov-br.ez318.periodicos.capes.gov.br/index.php/
+acervo/buscador.html?task=detalhes&source=all&id=W4285096711>.
+Acesso em: 27 mar. 2026.
+ISKANDAR, D.; ISMAWATIE, E.; IBRAHIM, M. N. Development of a
+technology-based animal electronic medical record information
+system for animal health services. In: International Conference of
+Health, Science and Technology (ICOHETECH). [S.l.: s.n.], 2023. 2023.
+MARTINS, K. L. O direito dos animais domésticos na família
+multiespécie. Lumen et Virtus, v. 15, n. 42, p. 7065–7084. 2024, Disponível
+em: <https://periodicos.newsciencepubl.com/LEV/article/view/1305/1868>.
+Acesso em: 26 mar. 2026.
+MORAES, I. T. et al. Uso de aplicativos e softwares para práticas
+clínicas e educacionais na medicina veterinária: uma revisão
+integrativa. Revista Caderno Pedagógico, v. 21, n. 5, p. 1–19. 2024,
+16
+
+--- PAGE 17 ---
+Disponível em: <https://ojs.studiespublicacoes.com.br/ojs/index.php/
+cadped/article/view/4169/3076>. Acesso em: 23 abr. 2026.
+MOUTINHO, F. F. B. et al. Fatores determinantes e condicionantes para
+a ocorrência de raiva em niterói, rj, brasil. Hygeia - Revista Brasileira de
+Geografia Médica e da Saúde, v. 14, n. 29, p. 54–64. 2018, Disponível em:
+<https://seer.ufu.br/index.php/hygeia/article/view/42671/24194>. Acesso
+em: 26 mar. 2026.
+MURPHY, R. G. L. et al. Animal identification systems in north america.
+The Professional Animal Scientist. 2008.
+RODRIGUES, B. d. F. d. R.; COSTA, V. P. d.; SOLER, O. Farmácia
+veterinária e serviços farmacêuticos destinados a animais de
+companhia: revisão integrativa. Research, Society and Development,
+v. 11, n. 4, p. 1–13. 2022, Disponível em: <https://sistemas.uft.edu.br/
+periodicos/index.php/direito/article/view/13985/20247>. Acesso em: 26
+mar. 2026.
+SARTORI, H. N.; MEDEIROS, M. T. PetID: Protótipo de um aplicativo
+para identificação de animais utilizando NFC. 2018. Trabalho de
+Conclusão de Curso, Universidade Federal de Santa Catarina.
+VIDAL, M. et al. Perspectives on individual animal identification from
+biology and computer vision. Integrative and Comparative Biology. 2021.
+VIEIRA, T. R.; MOSSOI, A. C. Direito à saúde, animais domésticos
+e o bem-estar da família multiespécie. Revista de Biodireito e
+Direito dos Animais, v. 6, n. 2, p. 56–78. 2020, Disponível em:
+<https://www.indexlaw.org/index.php/revistarbda/article/view/7012/pdf>.
+Acesso em: 26 mar. 2026.
+VIEIRA, V. M. M. et al. Development of a web system for pet care and
+adoption management: The case of the petcare platform. Revista
+Ibero-Americana de Humanidades, Ciências e Educação, v. 11, n. 12.
+2025.
+ZHAO, J. et al. Technologies in individual animal identification and
+meat products traceability. Biotechnology Biotechnological Equipment.
+2020.
+17
