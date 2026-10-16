@@ -14,7 +14,7 @@ if (!IS_LOCAL_HOST) {
 const STORAGE_KEY = "pet-id-wallet-state-v1";
 const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v4";
 const APP_NAME = "Registro Digital Animal";
-const APP_VERSION = "42";
+const APP_VERSION = "43";
 const APP_CACHE_NAME = `registro-digital-animal-v${APP_VERSION}`;
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
@@ -3389,14 +3389,14 @@ function openDrawer() {
         <button type="button" data-action="toggle-theme">
           <span>${themeIcon()}</span> ${state.theme === "dark" ? "Tema claro" : "Tema escuro"}
         </button>
-        <button type="button" data-action="logout">
-          <span>↩</span> Sair da conta
-        </button>
         ${drawerViews.map((view) => `
           <button class="${state.currentView === view.id ? "active" : ""}" type="button" data-action="view" data-view="${view.id}" aria-current="${state.currentView === view.id ? "page" : "false"}">
             <span>${view.icon}</span> ${view.label}
           </button>
         `).join("")}
+        <button type="button" data-action="logout">
+          <span>↩</span> Sair da conta
+        </button>
       </nav>
     </aside>
   `;
@@ -3768,6 +3768,7 @@ async function register(data) {
 }
 
 function logout() {
+  if (!confirm("Tem certeza de que deseja sair do app? Você voltará para a tela de login.")) return;
   state.auth = { ...state.auth, currentUserEmail: "", authView: "login", apiToken: "" };
   saveState();
   closeModal();

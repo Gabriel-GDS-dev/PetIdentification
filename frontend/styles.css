@@ -1,7 +1,7 @@
 :root {
   --bg: #e8f0ef;
-  --surface: #ffffff;
-  --surface-strong: #eef8f6;
+  --surface: #dce8e5;
+  --surface-strong: #cedfdb;
   --ink: #102a2a;
   --muted: #4e6566;
   --line: #afc3c0;
@@ -27,8 +27,8 @@
 
 html[data-theme="dark"] {
   --bg: #091718;
-  --surface: #1c3537;
-  --surface-strong: #254346;
+  --surface: #2b4a4d;
+  --surface-strong: #33575a;
   --ink: #edf7f5;
   --muted: #bbcdcd;
   --line: #527476;
@@ -166,19 +166,21 @@ html[data-theme="dark"] .topbar {
 
 html[data-theme="light"] .topbar,
 html[data-theme="light"] .bottom-nav,
-html[data-theme="light"] .card,
-html[data-theme="light"] .pet-card,
-html[data-theme="light"] .clinic-card,
-html[data-theme="light"] .timeline-item,
-html[data-theme="light"] .document-card,
-html[data-theme="light"] .status-card,
-html[data-theme="light"] .hero,
 html[data-theme="light"] .drawer,
 html[data-theme="light"] .modal-shell,
 html[data-theme="light"] .modal-body,
 html[data-theme="light"] .modal-head,
 html[data-theme="light"] .toast {
   background: rgba(255, 255, 255, 0.96);
+}
+
+html[data-theme="light"] .card,
+html[data-theme="light"] .pet-card,
+html[data-theme="light"] .clinic-card,
+html[data-theme="light"] .timeline-item,
+html[data-theme="light"] .document-card,
+html[data-theme="light"] .hero {
+  background: var(--surface);
 }
 
 html[data-theme="light"] .brand-mark,
