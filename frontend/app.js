@@ -14,7 +14,7 @@ if (!IS_LOCAL_HOST) {
 const STORAGE_KEY = "pet-id-wallet-state-v1";
 const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v4";
 const APP_NAME = "Registro Digital Animal";
-const APP_VERSION = "41";
+const APP_VERSION = "42";
 const APP_CACHE_NAME = `registro-digital-animal-v${APP_VERSION}`;
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
