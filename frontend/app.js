@@ -1,3 +1,4 @@
+import { deadlineStatus, vaccineSummary, buildReminders } from "./reminders.mjs";
 import { inject } from "@vercel/analytics";
 import { injectSpeedInsights } from "@vercel/speed-insights";
 
@@ -14,7 +15,7 @@ if (!IS_LOCAL_HOST) {
 const STORAGE_KEY = "pet-id-wallet-state-v1";
 const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v4";
 const APP_NAME = "Registro Digital Animal";
-const APP_VERSION = "43";
+const APP_VERSION = "44";
 const APP_CACHE_NAME = `registro-digital-animal-v${APP_VERSION}`;
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
@@ -285,6 +286,7 @@ let state = loadState();
 let deferredInstallPrompt = null;
 let petFilter = "all";
 let vaccineFilter = "all";
+let reminderFilter = "all";
 let searchTerm = "";
 let syncTimer = null;
 let syncing = false;
@@ -386,6 +388,19 @@ document.addEventListener("click", (event) => {
     const view = action.dataset.view;
 
     if (name === "view") navigate(view);
+    if (name === "reminder-filter") { reminderFilter = action.dataset.filter; render(); }
+    if (name === "reminder-open") {
+      state.selectedPetId = action.dataset.pet;
+      navigate(action.dataset.kind === "travel" ? "travel" : "wallet");
+      if (action.dataset.kind === "vaccine") openVaccineModal("", id);
+      if (action.dataset.kind === "document") openDocumentModal("", id);
+    }
+    if (name === "remove-travel-item") {
+      const trip = getTravelForPet(state.selectedPetId);
+      delete trip.items[id];
+      updateTravelChecklist(state.selectedPetId, trip.items);
+      saveState(); render();
+    }
     if (name === "auth-view") setAuthView(action.dataset.mode);
     if (name === "open-feedback") navigate("feedback");
     if (name === "feedback") navigate("feedback");
@@ -463,9 +478,9 @@ document.addEventListener("input", (event) => {
     const petId = state.selectedPetId || state.travel.selectedPetId || state.pets[0]?.id || "";
     const travel = getTravelForPet(petId);
     travel.items[event.target.dataset.travelCheck] = event.target.checked;
-    setTravelForPet(petId, travel);
+    updateTravelChecklist(petId, travel.items);
     saveState();
-    renderTravel();
+    render();
   }
 
   if (event.target.matches("[data-cep-input]")) {
@@ -693,7 +708,7 @@ function mergeState(partial = {}) {
 }
 
 function validView(view) {
-  return ["home", "pets", "wallet", "vaccines", "travel", "clinics", "feedback", "settings"].includes(view);
+  return ["home", "pets", "wallet", "vaccines", "travel", "clinics", "notifications", "feedback", "settings"].includes(view);
 }
 
 function normalizeAccessibility(partialAccessibility = {}) {
@@ -1367,6 +1382,7 @@ function layout(content) {
           </span>
         </div>
         <div class="top-actions">
+          <button class="secondary-button notification-button" type="button" data-action="view" data-view="notifications" aria-label="Notificações: ${buildReminders(state).length} pendências">♧ Avisos <span class="pill">${buildReminders(state).length}</span></button>
           <button class="icon-button" type="button" data-action="toggle-theme" aria-label="Alternar tema">${themeIcon()}</button>
           <button class="secondary-button desktop-only" type="button" data-action="new-pet">＋ Pet</button>
           <button class="owner-button" type="button" data-action="edit-owner" aria-label="Editar dados do tutor">
@@ -1389,6 +1405,7 @@ function layout(content) {
 }
 
 function screenTemplate() {
+  if (state.currentView === "notifications") return notificationsView();
   if (state.currentView === "home") return homeView();
   if (state.currentView === "pets") return petsView();
   if (state.currentView === "wallet") return walletView();
@@ -1641,7 +1658,7 @@ function walletView() {
 
 function animalWalletDocumentView(pet, petVaccines, petDocs) {
   const nextVaccine = petVaccines[0];
-  const status = nextVaccine ? vaccineStatus(nextVaccine) : { type: "warn", label: "Sem vacinas" };
+  const status = vaccineSummary(petVaccines);
   const documentNumber = pet.registry || `PET-${pet.id.slice(-6).toUpperCase()}`;
   const issuedAt = formatDate(todayISO);
   const address = ownerAddress();
@@ -1705,7 +1722,7 @@ function animalWalletDocumentView(pet, petVaccines, petDocs) {
                 ${walletField("Tutor responsável", state.owner.name, true)}
                 <div class="pet-id-health ${status.type}">
                   <span>Situação vacinal</span>
-                  <strong>${escapeHTML(nextVaccine ? `${nextVaccine.name} · ${status.label}` : status.label)}</strong>
+                  <strong>${escapeHTML(status.label)}</strong>
                 </div>
               </div>
             </div>
@@ -1806,7 +1823,7 @@ function animalWalletDocumentView(pet, petVaccines, petDocs) {
             ${detailRow("Microchip", pet.microchip)}
             ${detailRow("Tutor", state.owner.name)}
             ${detailRow("Endereço", address)}
-            ${detailRow("Vacina", nextVaccine ? `${nextVaccine.name} - ${status.label}` : "Sem vacinas")}
+            ${detailRow("Vacina", status.label)}
             ${detailRow("Emitido em", issuedAt)}
             ${detailRow("Observações", pet.notes)}
           </div>
@@ -1959,7 +1976,7 @@ function signatureMarkup(pet, fallbackName = "") {
 
 function walletDocumentView(pet, petVaccines, petDocs) {
   const nextVaccine = petVaccines[0];
-  const status = nextVaccine ? vaccineStatus(nextVaccine) : { type: "warn", label: "Sem vacinas" };
+  const status = vaccineSummary(petVaccines);
   const documentNumber = pet.registry || `PET-${pet.id.slice(-6).toUpperCase()}`;
   const issuedAt = formatDate(todayISO);
 
@@ -2105,6 +2122,7 @@ function vaccinesView() {
           ["all", "Todas"],
           ["late", "Vencidas"],
           ["soon", "Próximas"],
+          ["unknown", "Sem data"],
           ["ok", "Em dia"]
         ].map(([value, label]) => `
           <button type="button" class="${vaccineFilter === value ? "active" : ""}" onclick="window.__setVaccineFilter('${value}')">${label}</button>
@@ -2135,7 +2153,7 @@ function renderVaccines() {
 }
 
 function filterLabel(value) {
-  return { all: "todas", late: "vencidas", soon: "próximas", ok: "em dia" }[value] || "todas";
+  return { all: "todas", late: "vencidas", soon: "próximas", ok: "em dia", unknown: "sem data" }[value] || "todas";
 }
 
 function vaccinesListTemplate() {
@@ -2150,6 +2168,32 @@ function vaccinesListTemplate() {
   return `<div class="timeline">${vaccines.map(vaccineItem).join("")}</div>`;
 }
 
+function updateTravelChecklist(petId, items) {
+  const trip = getTravelForPet(petId);
+  const participants = trip.sharedGroupId ? state.pets.filter(pet => getTravelForPet(pet.id).sharedGroupId === trip.sharedGroupId) : [{ id: petId }];
+  for (const pet of participants) {
+    const current = getTravelForPet(pet.id);
+    current.items = { ...items };
+    state.travelByPet[pet.id] = current;
+  }
+  state.travel = getTravelForPet(petId);
+}
+
+function notificationsView() {
+  const reminders = buildReminders(state);
+  const filtered = reminders.filter(item => reminderFilter === "all" || item.kind === reminderFilter);
+  return `<div class="page-head"><span class="eyebrow">Acompanhamento</span><h1>Notificações e lembretes</h1>
+    <p class="muted">Vacinas e documentos vencidos ou com prazo nos próximos 30 dias, além de viagens próximas com itens pendentes.</p>
+    <p class="muted small">Os avisos são calculados ao abrir o app. Confira os dados e mantenha as datas atualizadas.</p></div>
+    <div class="toolbar"><div class="segmented" aria-label="Filtrar notificações">${[["all", "Todas"], ["vaccine", "Vacinas"], ["document", "Documentos"], ["travel", "Viagens"]].map(([value, label]) => `<button type="button" data-action="reminder-filter" data-filter="${value}" class="${reminderFilter === value ? "active" : ""}" aria-pressed="${reminderFilter === value}">${label}</button>`).join("")}</div></div>
+    <p class="muted">${filtered.length} aviso(s)</p>
+    ${filtered.length ? `<div class="timeline">${filtered.map(item => `<article class="timeline-item">
+      <div class="timeline-top"><h2>${escapeHTML(item.title)}</h2><span class="pill ${item.type}">${item.type === "danger" ? "Vencido" : "Atenção"}</span></div>
+      <p>${escapeHTML(item.detail)}</p><p class="muted small">${item.date ? formatDate(item.date) : "Cadastre a data da próxima dose"}</p>
+      <button type="button" class="secondary-button" data-action="reminder-open" data-kind="${item.kind}" data-id="${escapeHTML(item.id)}" data-pet="${escapeHTML(item.petId)}">${item.kind === "travel" ? "Abrir checklist" : "Conferir registro"}</button>
+    </article>`).join("")}</div>` : emptyState("✓", "Nenhuma pendência neste filtro", "Os avisos dependem dos registros cadastrados e não substituem a conferência das informações.")}`;
+}
+
 function travelView() {
   const selectedPetId = state.selectedPetId || state.travel?.selectedPetId || state.pets[0]?.id || "";
   const petTravel = getTravelForPet(selectedPetId);
@@ -2157,6 +2201,7 @@ function travelView() {
   state.travel.selectedPetId = selectedPetId;
   const travelPet = state.pets.find((pet) => pet.id === selectedPetId) || getSelectedPet();
   const progress = travelProgressForPet(selectedPetId);
+  const petDocs = state.documents.filter(doc => doc.petId === selectedPetId);
   const items = [
     ["vaccine", "Vacinas conferidas", "Principalmente antirrábica e polivalente"],
     ["certificate", "Atestado de saúde", "Emitido pelo veterinário antes da viagem"],
@@ -2164,13 +2209,15 @@ function travelView() {
     ["food", "Ração, água e potes", "Quantidade para ida e volta"],
     ["collar", "Coleira com identificação", "Telefone do tutor atualizado"],
     ["destinationRules", "Regras do destino", "Hotel, companhia aérea ou rodoviária"],
-    ["medicine", "Medicamentos e receitas", "Inclua antipulgas e uso contínuo"]
+    ["medicine", "Medicamentos e receitas", "Inclua antipulgas e uso contínuo"],
+    ...Object.keys(petTravel.items).filter(key => key.startsWith("custom:")).map(key => [key, key.slice(7), "Item adicional para esta viagem"])
   ];
 
   return `
     <div class="page-head">
       <span class="eyebrow">Viagem com pet</span>
       <h1>Preparação segura</h1>
+      <p class="muted">${petTravel.sharedGroupId ? "Checklist compartilhado: as marcações são atualizadas para todos os pets do grupo." : "Checklist individual: cada pet tem suas próprias marcações."}</p>
       <p class="muted">Checklist, destino, transporte e documentos essenciais para levar o pet.</p>
     </div>
 
@@ -2201,10 +2248,10 @@ function travelView() {
         <div class="checklist">
           ${items.map(([key, title, subtitle]) => `
             <label class="check-item ${petTravel.items[key] ? "done" : ""}">
-              <input type="checkbox" data-travel-check="${key}" ${petTravel.items[key] ? "checked" : ""} />
+              <input type="checkbox" data-travel-check="${escapeHTML(key)}" ${petTravel.items[key] ? "checked" : ""} />
               <span>
-                <strong>${title}</strong>
-                <span class="muted small" style="display:block;">${subtitle}</span>
+                <strong>${escapeHTML(title)}</strong>
+                <span class="muted small" style="display:block;">${escapeHTML(subtitle)}</span>
               </span>
               <span>${petTravel.items[key] ? "✓" : "○"}</span>
             </label>
@@ -2213,9 +2260,23 @@ function travelView() {
       </div>
       <aside class="grid">
         ${travelPet ? petCard(travelPet, true) : emptyState("◉", "Sem pet", "Cadastre um pet para planejar a viagem.")}
+        ${selectedPetId ? `<div class="card">
+          <h2>Itens adicionais</h2><p class="muted small">Inclua necessidades específicas, como medicação, acessibilidade e alimentação.</p>
+          <form class="form" data-form="travel-item">
+            <label for="travelExtraItem">Novo item do checklist</label>
+            <input id="travelExtraItem" name="label" required maxlength="100" />
+            <button class="secondary-button" type="submit">Adicionar item</button>
+          </form>
+          ${Object.keys(petTravel.items).filter(key => key.startsWith("custom:")).map(key => `<button class="ghost-button" type="button" data-action="remove-travel-item" data-id="${escapeHTML(key)}">Remover: ${escapeHTML(key.slice(7))}</button>`).join("")}
+        </div>` : ""}
         <div class="card">
           <h2>Anotações</h2>
           <p class="muted" style="margin-top: 8px;">${escapeHTML(petTravel.notes || "Sem anotações para a viagem.")}</p>
+        </div>
+        <div class="card">
+          <div class="section-title"><h2>Documentos do pet</h2>${selectedPetId ? `<button class="secondary-button" type="button" data-action="new-document" data-id="${escapeHTML(selectedPetId)}">Anexar</button>` : ""}</div>
+          <p class="muted small">Confira os documentos e a validade antes da viagem.</p>
+          ${petDocs.length ? petDocs.map(documentItem).join("") : "<p class='muted'>Nenhum documento cadastrado para este pet.</p>"}
         </div>
       </aside>
     </section>
@@ -2839,7 +2900,7 @@ function quickAction(view, icon, title, subtitle) {
 
 function petCard(pet, compact = false) {
   const vaccines = getVaccines(pet.id);
-  const alertCount = vaccines.filter((vaccine) => ["late", "soon"].includes(vaccineFilterKey(vaccine))).length;
+  const summary = vaccineSummary(vaccines);
   return `
     <article class="pet-card">
       <div class="pet-top">
@@ -2849,7 +2910,7 @@ function petCard(pet, compact = false) {
           <div class="pet-meta">
             <span class="pill">${escapeHTML(pet.species)}</span>
             <span class="pill">${petAge(pet.birthDate)}</span>
-            ${alertCount ? `<span class="pill warn">${alertCount} alerta${alertCount === 1 ? "" : "s"}</span>` : `<span class="pill ok">Em dia</span>`}
+            <span class="pill vaccine-summary ${summary.type}">${escapeHTML(summary.label)}</span>
           </div>
         </div>
         <button class="icon-button" type="button" data-action="pet-wallet" data-id="${pet.id}" aria-label="Abrir carteira de ${escapeHTML(pet.name)}">›</button>
@@ -3340,6 +3401,7 @@ function openDocumentModal(petId = "", documentId = "") {
 
 function openTravelModal() {
   const selectedPetId = state.selectedPetId || state.travel?.selectedPetId || state.pets[0]?.id || "";
+  if (!selectedPetId) { notify("Cadastre um pet para planejar a viagem."); return; }
   const activeTravel = getTravelForPet(selectedPetId);
   openModal(`
     <div class="modal-head">
@@ -3348,13 +3410,20 @@ function openTravelModal() {
     </div>
     <div class="modal-body">
       <form class="form" data-form="travel">
+        <input type="hidden" name="selectedPetId" value="${escapeHTML(selectedPetId)}" />
         <div class="form-grid two">
-          ${petSelectField("Pet", "selectedPetId", selectedPetId)}
+          <p>Pet principal: <strong>${escapeHTML(state.pets.find(pet => pet.id === selectedPetId)?.name || "Pet")}</strong></p>
           ${field("Destino", "destination", activeTravel.destination, "text", true)}
           ${field("Data", "date", activeTravel.date, "date")}
           ${selectField("Transporte", "transport", activeTravel.transport, ["Carro", "Ônibus", "Avião", "Hospedagem", "Outro"])}
         </div>
-        ${textareaField("Anotações", "notes", activeTravel.notes)}
+        ${textareaField("Anotações e necessidades específicas", "notes", activeTravel.notes)}
+        <fieldset class="card"><legend>Pets que vão viajar juntos</legend>
+          <p class="muted small">Destino, data e transporte serão aplicados aos pets selecionados. O pet acima sempre participa.</p>
+          ${state.pets.filter(pet => pet.id !== selectedPetId).map(pet => `<label class="check-item"><input type="checkbox" name="companion" value="${escapeHTML(pet.id)}" ${activeTravel.sharedGroupId && getTravelForPet(pet.id).sharedGroupId === activeTravel.sharedGroupId ? "checked" : ""} />${escapeHTML(pet.name)}</label>`).join("")}
+          <label class="check-item"><input type="checkbox" name="sharedChecklist" ${activeTravel.sharedGroupId ? "checked" : ""} />Usar checklist compartilhado para os pets selecionados</label>
+          <p class="muted small">Ao compartilhar, o checklist do pet selecionado acima será usado para todo o grupo. Desmarque para manter listas individuais.</p>
+        </fieldset>
         <button class="primary-button" type="submit">Salvar viagem</button>
       </form>
     </div>
@@ -3365,7 +3434,7 @@ function openDrawer() {
   const drawer = document.createElement("div");
   drawer.className = "drawer-backdrop";
   drawer.dataset.modal = "drawer";
-  const drawerViews = [...views, { id: "feedback", label: "Feedback", icon: "★" }, { id: "settings", label: "Configurações", icon: "⚙" }];
+  const drawerViews = [...views, { id: "notifications", label: "Notificações", icon: "♧" }, { id: "feedback", label: "Feedback", icon: "★" }, { id: "settings", label: "Configurações", icon: "⚙" }];
   drawer.innerHTML = `
     <aside class="drawer">
       <div class="drawer-head">
@@ -3967,9 +4036,36 @@ async function handleForm(form) {
         ...((data.items && typeof data.items === "object") ? data.items : {})
       }
     };
-    setTravelForPet(selectedPetId, nextTravel);
+    const companions = [...form.querySelectorAll('[name="companion"]:checked')].map(input => input.value).filter(id => state.pets.some(pet => pet.id === id) && id !== selectedPetId);
+    const groupId = data.sharedChecklist && companions.length ? createId("trip") : "";
+    if (currentTravel.sharedGroupId) {
+      for (const pet of state.pets) {
+        const previous = getTravelForPet(pet.id);
+        if (previous.sharedGroupId === currentTravel.sharedGroupId) setTravelForPet(pet.id, { ...previous, sharedGroupId: "" });
+      }
+    }
+    delete nextTravel.companion;
+    delete nextTravel.sharedChecklist;
+    for (const petId of [selectedPetId, ...companions]) {
+      const individual = getTravelForPet(petId);
+      setTravelForPet(petId, { ...nextTravel, selectedPetId: petId, sharedGroupId: groupId, items: groupId || petId === selectedPetId ? nextTravel.items : individual.items });
+      if (groupId) state.travelByPet[petId].items = { ...nextTravel.items };
+    }
     state.selectedPetId = selectedPetId;
+    state.travel = getTravelForPet(selectedPetId);
     notify("Plano de viagem atualizado.");
+  }
+
+  if (type === "travel-item") {
+    const label = String(data.label || "").trim().slice(0, 100);
+    const petId = state.selectedPetId;
+    if (!label || !petId) return;
+    const trip = getTravelForPet(petId);
+    const key = `custom:${label}`;
+    if (Object.hasOwn(trip.items, key)) { notify("Esse item já está no checklist."); return; }
+    trip.items[key] = false;
+    updateTravelChecklist(petId, trip.items);
+    notify("Item adicionado ao checklist.");
   }
 
   if (type === "feedback") {
@@ -4505,14 +4601,14 @@ async function drawWalletBack(context, pet, doc) {
 }
 
 function walletPdfData(pet) {
-  const nextVaccine = getVaccines(pet.id)[0];
-  const status = nextVaccine ? vaccineStatus(nextVaccine) : { type: "warn", label: "Sem vacinas" };
+  const petVaccines = getVaccines(pet.id);
+  const status = vaccineSummary(petVaccines);
   return {
     documentNumber: pet.registry || `PET-${pet.id.slice(-6).toUpperCase()}`,
     ownerName: state.owner.name || "Tutor",
     issuedAt: formatDate(todayISO),
     address: ownerAddress(),
-    vaccineText: nextVaccine ? `${nextVaccine.name} - ${status.label}` : status.label,
+    vaccineText: status.label,
     vaccineColor: status.type === "danger" ? "#a12f38" : status.type === "warn" ? "#8c5a0f" : "#226b43",
     qrText: `${pet.registry || pet.id}-${pet.microchip || ""}-${state.owner.phone || ""}`
   };
@@ -4864,12 +4960,7 @@ function vaccineFilterKey(vaccine) {
 }
 
 function vaccineStatus(vaccine) {
-  if (!vaccine.dueDate) return { type: "warn", filterKey: "soon", label: "Sem data" };
-  const due = new Date(`${vaccine.dueDate}T12:00:00`);
-  const diffDays = Math.ceil((due - now) / 86400000);
-  if (diffDays < 0) return { type: "danger", filterKey: "late", label: "Vencida" };
-  if (diffDays <= 30) return { type: "warn", filterKey: "soon", label: `${diffDays} dia${diffDays === 1 ? "" : "s"}` };
-  return { type: "ok", filterKey: "ok", label: "Em dia" };
+  return deadlineStatus(vaccine.dueDate);
 }
 
 function travelProgress() {

@@ -811,6 +811,19 @@ h3 {
   color: var(--warn);
 }
 
+.vaccine-summary {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
+@media (max-width: 680px) {
+  .top-actions .notification-button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
 .pill.danger {
   background: var(--danger-soft);
   color: var(--danger);
