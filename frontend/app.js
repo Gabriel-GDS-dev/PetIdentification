@@ -15,7 +15,7 @@ if (!IS_LOCAL_HOST) {
 const STORAGE_KEY = "pet-id-wallet-state-v1";
 const LEGACY_CLEANUP_KEY = "pet-id-wallet-legacy-cleanup-v4";
 const APP_NAME = "Registro Digital Animal";
-const APP_VERSION = "44";
+const APP_VERSION = "45";
 const APP_CACHE_NAME = `registro-digital-animal-v${APP_VERSION}`;
 const API_BASE = window.location.origin;
 const SYNC_DEBOUNCE_MS = 900;
@@ -37,7 +37,7 @@ const FEEDBACK_LIKERT_OPTIONS = [
   { value: 5, label: "Concordo totalmente" }
 ];
 
-const FEEDBACK_LIKERT_SECTIONS = [
+const LEGACY_FEEDBACK_LIKERT_SECTIONS = [
   {
     field: "improvements",
     title: "O que pode ficar melhor?",
@@ -93,6 +93,36 @@ const FEEDBACK_LIKERT_SECTIONS = [
     ]
   }
 ];
+
+const FEEDBACK_LIKERT_SECTIONS = [
+  {
+    field: "improvements",
+    title: "Uso das funções do aplicativo",
+    description: "Após utilizar cada função, indique o quanto você concorda com a afirmação. Se não a utilizou, marque Não utilizei.",
+    commentLabel: "Conte como foi sua experiência (opcional)",
+    commentPlaceholder: "Descreva o que aconteceu ao usar esta função.",
+    questions: [
+      { key: "walletClarity", summary: "Consulta da carteirinha", label: "Consegui consultar as informações de identificação do pet na carteirinha digital.", hint: "Abra a carteirinha e consulte os dados do pet." },
+      { key: "vaccineRegistration", summary: "Registro de vacinas", label: "Consegui registrar uma vacina do pet.", hint: "Na área de vacinas, adicione um registro e confira se ele foi salvo." },
+      { key: "vaccineStatus", summary: "Situação das vacinas", label: "Consegui identificar a situação das vacinas do pet pelas datas e pelos status apresentados.", hint: "Consulte a lista de vacinas e observe as datas e os status disponíveis." },
+      { key: "travelChecklist", summary: "Checklist de viagem", label: "Consegui usar o checklist para conferir os itens da viagem do pet.", hint: "Na área de viagens, marque e desmarque os itens do checklist." }
+    ]
+  },
+  {
+    field: "suggestions",
+    title: "Cadastro, documentos e navegação",
+    description: "Avalie sua experiência com as funções abaixo usando a mesma escala.",
+    commentLabel: "Conte como foi sua experiência (opcional)",
+    commentPlaceholder: "Descreva o que aconteceu ao usar esta função.",
+    questions: [
+      { key: "petRegistration", summary: "Cadastro do pet", label: "Consegui cadastrar um pet no aplicativo.", hint: "Adicione um pet e confira se os dados foram salvos." },
+      { key: "petEditing", summary: "Edição do pet", label: "Consegui alterar os dados de um pet cadastrado.", hint: "Edite uma informação do pet e confira se a alteração foi salva." },
+      { key: "documentAccess", summary: "Documentos do pet", label: "Consegui consultar um documento anexado ao cadastro do pet.", hint: "Na carteira, abra um documento que você anexou. Se não anexou ou consultou documentos, marque Não utilizei." },
+      { key: "navigation", summary: "Navegação", label: "Consegui encontrar as funções que procurei nos menus do aplicativo.", hint: "Considere as telas e funções que você acessou durante o uso." }
+    ]
+  }
+];
+const FEEDBACK_RESPONSE_OPTIONS = [...FEEDBACK_LIKERT_OPTIONS, { value: "not_used", label: "Não utilizei" }];
 
 const now = new Date();
 const todayISO = toISODate(now);
@@ -2498,11 +2528,12 @@ function hasUsableCoordinates(latitude, longitude) {
 
 function feedbackView() {
   const currentFeedback = state.feedback?.[state.feedback.length - 1] || null;
+  const formFeedback = parseFeedbackLikertValue(currentFeedback?.improvements).version === 3 ? currentFeedback : null;
   return `
     <div class="page-head">
       <span class="eyebrow">Feedback</span>
       <h1>Avaliação do app e da carteira</h1>
-      <p class="muted">Ajude a melhorar a experiência do app, a clareza das informações da carteira e a qualidade do atendimento veterinário.</p>
+      <p class="muted">Avalie as funções que você utilizou no aplicativo. Responda com base na sua experiência; não é necessário usar todas as funções para participar.</p>
     </div>
 
     <section class="section screen-grid">
@@ -2513,21 +2544,21 @@ function feedbackView() {
               <div class="field">
                 <label>Grau de satisfação com as informações do pet na carteira</label>
                 <div class="star-picker" data-rating-group="veterinarySatisfaction">
-                  ${[1, 2, 3, 4, 5].map((value) => `<button type="button" class="star-button ${Number(currentFeedback?.veterinarySatisfaction || 0) >= value ? "active" : ""}" data-rating-value="${value}" data-rating-field="veterinarySatisfaction" aria-label="${value} estrela${value > 1 ? "s" : ""}">★</button>`).join("")}
+                  ${[1, 2, 3, 4, 5].map((value) => `<button type="button" class="star-button ${Number(formFeedback?.veterinarySatisfaction || 0) >= value ? "active" : ""}" data-rating-value="${value}" data-rating-field="veterinarySatisfaction" aria-label="${value} estrela${value > 1 ? "s" : ""}">★</button>`).join("")}
                 </div>
-                <input type="hidden" name="veterinarySatisfaction" value="${Number(currentFeedback?.veterinarySatisfaction || 0)}" />
+                <input type="hidden" name="veterinarySatisfaction" value="${Number(formFeedback?.veterinarySatisfaction || 0)}" />
               </div>
 
               <div class="field">
                 <label>Avaliação geral do app</label>
                 <div class="star-picker" data-rating-group="appRating">
-                  ${[1, 2, 3, 4, 5].map((value) => `<button type="button" class="star-button ${Number(currentFeedback?.appRating || 0) >= value ? "active" : ""}" data-rating-value="${value}" data-rating-field="appRating" aria-label="${value} estrela${value > 1 ? "s" : ""}">★</button>`).join("")}
+                  ${[1, 2, 3, 4, 5].map((value) => `<button type="button" class="star-button ${Number(formFeedback?.appRating || 0) >= value ? "active" : ""}" data-rating-value="${value}" data-rating-field="appRating" aria-label="${value} estrela${value > 1 ? "s" : ""}">★</button>`).join("")}
                 </div>
-                <input type="hidden" name="appRating" value="${Number(currentFeedback?.appRating || 0)}" />
+                <input type="hidden" name="appRating" value="${Number(formFeedback?.appRating || 0)}" />
               </div>
             </div>
 
-            ${FEEDBACK_LIKERT_SECTIONS.map((section) => renderFeedbackLikertSection(section, currentFeedback)).join("")}
+            ${FEEDBACK_LIKERT_SECTIONS.map((section) => renderFeedbackLikertSection(section, formFeedback)).join("")}
 
             <div class="button-row">
               <button class="primary-button" type="submit">Salvar avaliação</button>
@@ -2538,7 +2569,8 @@ function feedbackView() {
 
       <aside class="grid">
         <div class="card">
-          <h2>Último feedback</h2>
+          <h2>Última avaliação enviada</h2>
+          ${currentFeedback && !formFeedback ? `<p class="muted small">Este envio pertence ao formulário anterior de melhorias e sugestões. Responda ao novo formulário para avaliar o uso das funções.</p>` : ""}
           <div class="detail-list" style="margin-top: 12px;">
             ${currentFeedback ? `
               <div class="detail-row"><span class="detail-label">Informações do pet</span><span class="detail-value">${escapeHTML(currentFeedback.veterinarySatisfaction ? `${currentFeedback.veterinarySatisfaction}/5` : "Sem avaliação")}</span></div>
@@ -2550,7 +2582,7 @@ function feedbackView() {
                 <span class="empty-icon">★</span>
                 <div>
                   <h2>Ainda não há avaliação</h2>
-                  <p class="muted">Envie sua análise para melhorar as informações da carteira e a experiência do app.</p>
+                  <p class="muted">Avalie as funções que você utilizou e salve suas respostas.</p>
                 </div>
               </div>
             `}
@@ -2570,12 +2602,13 @@ function feedbackLikertCommentFieldName(section, question) {
 }
 
 function validLikertValue(value) {
+  if (value === "not_used") return "not_used";
   const numericValue = Number(value);
   return FEEDBACK_LIKERT_OPTIONS.some((option) => option.value === numericValue) ? numericValue : 0;
 }
 
 function shouldAskLikertComment(value) {
-  return validLikertValue(value) >= 4;
+  return Boolean(validLikertValue(value)) && value !== "not_used";
 }
 
 function parseFeedbackLikertValue(value = "") {
@@ -2586,6 +2619,7 @@ function parseFeedbackLikertValue(value = "") {
     const parsed = JSON.parse(text);
     if (parsed && typeof parsed === "object" && parsed.type === "likert" && parsed.ratings && typeof parsed.ratings === "object") {
       return {
+        version: parsed.version || 1,
         ratings: parsed.ratings,
         comments: parsed.comments && typeof parsed.comments === "object" ? parsed.comments : {},
         legacyText: ""
@@ -2622,15 +2656,15 @@ function serializeFeedbackLikertSection(data, section) {
 
   return JSON.stringify({
     type: "likert",
-    version: 2,
+    version: 3,
     ratings,
     comments
   });
 }
 
 function formatLikertValue(value) {
-  const option = FEEDBACK_LIKERT_OPTIONS.find((item) => item.value === validLikertValue(value));
-  return option ? `${option.value}/5 ${option.label}` : "Sem resposta";
+  const option = FEEDBACK_RESPONSE_OPTIONS.find((item) => item.value === validLikertValue(value));
+  return option?.value === "not_used" ? option.label : option ? `${option.value}/5 ${option.label}` : "Sem resposta";
 }
 
 function updateLikertCommentField(input) {
@@ -2641,7 +2675,7 @@ function updateLikertCommentField(input) {
 
   const shouldShow = shouldAskLikertComment(input.value);
   panel.hidden = !shouldShow;
-  textarea.required = shouldShow;
+  textarea.required = false;
   textarea.disabled = !shouldShow;
   if (!shouldShow) textarea.value = "";
 }
@@ -2649,7 +2683,7 @@ function updateLikertCommentField(input) {
 function renderFeedbackLikertScale() {
   return `
     <div class="likert-scale" aria-hidden="true">
-      ${FEEDBACK_LIKERT_OPTIONS.map((option) => `<span><strong>${option.value}</strong>${escapeHTML(option.label)}</span>`).join("")}
+      ${FEEDBACK_RESPONSE_OPTIONS.map((option) => `<span><strong>${option.value === "not_used" ? "N/U" : option.value}</strong>${escapeHTML(option.label)}</span>`).join("")}
     </div>
   `;
 }
@@ -2673,19 +2707,19 @@ function renderFeedbackLikertSection(section, currentFeedback) {
                 <span>${escapeHTML(question.hint)}</span>
               </div>
               <div class="likert-options" role="radiogroup" aria-label="${escapeHTML(question.label)}">
-                ${FEEDBACK_LIKERT_OPTIONS.map((option) => {
+                ${FEEDBACK_RESPONSE_OPTIONS.map((option) => {
                   const id = `${feedbackLikertFieldName(section, question)}_${option.value}`;
                   return `
                     <label class="likert-option" for="${id}" title="${escapeHTML(option.label)}">
-                      <input id="${id}" type="radio" name="${feedbackLikertFieldName(section, question)}" value="${option.value}" data-likert-input ${selectedValue === option.value ? "checked" : ""} required />
-                      <span>${option.value}</span>
+                      <input id="${id}" type="radio" name="${feedbackLikertFieldName(section, question)}" value="${option.value}" aria-label="${escapeHTML(option.label)}" data-likert-input ${selectedValue === option.value ? "checked" : ""} required />
+                      <span>${option.value === "not_used" ? "N/U" : option.value}</span>
                     </label>
                   `;
                 }).join("")}
               </div>
               <div class="likert-comment" data-likert-comment-panel ${commentIsVisible ? "" : "hidden"}>
                 <label for="${commentId}">${escapeHTML(section.commentLabel)}</label>
-                <textarea id="${commentId}" name="${feedbackLikertCommentFieldName(section, question)}" data-likert-comment placeholder="${escapeHTML(section.commentPlaceholder)}" ${commentIsVisible ? "required" : "disabled"}>${escapeHTML(commentValue)}</textarea>
+                <textarea id="${commentId}" name="${feedbackLikertCommentFieldName(section, question)}" data-likert-comment placeholder="${escapeHTML(section.commentPlaceholder)}" ${commentIsVisible ? "" : "disabled"}>${escapeHTML(commentValue)}</textarea>
               </div>
             </div>
           `;
@@ -2698,8 +2732,9 @@ function renderFeedbackLikertSection(section, currentFeedback) {
 function renderFeedbackLikertSummary(currentFeedback) {
   return `
     <div class="feedback-summary">
-      ${FEEDBACK_LIKERT_SECTIONS.map((section) => {
-        const parsed = parseFeedbackLikertValue(currentFeedback?.[section.field]);
+      ${FEEDBACK_LIKERT_SECTIONS.map((currentSection) => {
+        const parsed = parseFeedbackLikertValue(currentFeedback?.[currentSection.field]);
+        const section = parsed.version === 3 ? currentSection : LEGACY_FEEDBACK_LIKERT_SECTIONS.find((item) => item.field === currentSection.field);
         if (parsed.legacyText) {
           return `
             <div class="feedback-summary-section">

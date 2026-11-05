@@ -298,6 +298,31 @@ BEGIN
       ];
     END IF;
 
+    -- Version 3 evaluates use of existing functions. Keep the earlier wording
+    -- above for historical submissions; their scores have a different meaning.
+    IF payload ->> 'version' = '3' THEN
+      IF section_name = 'improvements' THEN
+        section_label := 'Uso das funções do aplicativo';
+        question_keys := ARRAY['walletClarity', 'vaccineRegistration', 'vaccineStatus', 'travelChecklist'];
+        question_labels := ARRAY[
+          'Consegui consultar as informações de identificação do pet na carteirinha digital.',
+          'Consegui registrar uma vacina do pet.',
+          'Consegui identificar a situação das vacinas do pet pelas datas e pelos status apresentados.',
+          'Consegui usar o checklist para conferir os itens da viagem do pet.'
+        ];
+      ELSE
+        section_label := 'Cadastro, documentos e navegação';
+        question_keys := ARRAY['petRegistration', 'petEditing', 'documentAccess', 'navigation'];
+        question_labels := ARRAY[
+          'Consegui cadastrar um pet no aplicativo.',
+          'Consegui alterar os dados de um pet cadastrado.',
+          'Consegui consultar um documento anexado ao cadastro do pet.',
+          'Consegui encontrar as funções que procurei nos menus do aplicativo.'
+        ];
+      END IF;
+    END IF;
+
+    -- Non-use is stored in the original JSON as "not_used", not as a score.
     FOR question_index IN 1..array_length(question_keys, 1) LOOP
       question_key := question_keys[question_index];
       question_label := question_labels[question_index];

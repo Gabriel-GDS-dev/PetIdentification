@@ -1982,7 +1982,7 @@ button:disabled {
 
 .likert-scale {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 6px;
   color: var(--muted);
   font-size: 0.72rem;
@@ -2040,7 +2040,7 @@ button:disabled {
 
 .likert-options {
   display: grid;
-  grid-template-columns: repeat(5, minmax(36px, 1fr));
+  grid-template-columns: repeat(6, minmax(36px, 1fr));
   gap: 6px;
   min-width: 0;
 }

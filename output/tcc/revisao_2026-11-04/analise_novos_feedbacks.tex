@@ -1,0 +1,76 @@
+\subsection{Avaliações estruturadas registradas em novembro de 2026}
+\label{sec:feedbacks_novembro}
+
+Uma coleta complementar foi consultada em 4 de novembro de 2026 no PostgreSQL disponibilizado pela integração Prisma Postgres da Vercel. A consulta relacionou a tabela principal de avaliações às respostas de cada pergunta pela chave composta de usuário e avaliação. Foram encontrados cinco envios vinculados a quatro contas. Dois envios pertenciam à mesma conta, apresentavam notas e comentários idênticos e foram registrados com aproximadamente 15 segundos de diferença. Para evitar a contagem duplicada, foi mantido na análise apenas o envio mais recente dessa conta; nenhum registro foi excluído do banco. O recorte resultou em quatro avaliações, uma por conta, identificadas como N1 a N4 pela ordem cronológica dos envios selecionados, totalizando 24 respostas válidas às seis afirmações de concordância.
+
+Conta distinta não comprova participante distinto ou independência entre respostas. A extração não estabeleceu profissão, município, experiência de uso ou vínculo dessas contas com os 13 aceites da planilha de recrutamento. Por isso, os novos registros não foram somados aos dois retornos anteriores para anunciar seis participantes, nem utilizados para recalcular a taxa de resposta dos convites de setembro. A caracterização se restringe às avaliações registradas na aplicação. Os nomes, endereços eletrônicos e identificadores técnicos das contas foram omitidos da apresentação dos resultados.
+
+Os registros selecionados ocorreram em 4 de novembro de 2026, entre 15h15 e 15h29, no horário de Brasília; o banco apresenta os horários em UTC. A proximidade temporal dos envios caracteriza o momento de registro e não demonstra duração dos testes, tempo de uso do aplicativo ou exposição equivalente às funcionalidades. A seleção do último envio por conta é uma regra de preparação do corpus e não uma comprovação da identidade de quem respondeu.
+
+\subsubsection{Escalas e tratamento das respostas}
+
+O formulário contém dois campos gerais de avaliação e seis afirmações distribuídas entre necessidade de melhoria e utilidade de sugestões. A escala de concordância varia de 1 (discordo totalmente) a 5 (concordo totalmente), com 2 para discordância parcial, 3 para posição neutra e 4 para concordância parcial. As duas partes têm sentidos diferentes: discordar de que uma área precisa melhorar representa baixa concordância com o problema enunciado, enquanto concordar com uma sugestão representa utilidade percebida para uma possível mudança. Consequentemente, os seis itens não foram somados em um índice geral de satisfação ou de usabilidade.
+
+Nos campos gerais, N1 e N2 registraram nota 5 tanto para satisfação com as informações da carteira quanto para avaliação do aplicativo, e N4 atribuiu nota 4 aos dois campos. N3 apresentou zero em ambos. Como zero não integra a escala de 1 a 5 apresentada ao usuário, foi tratado como ausência de resposta válida nesses campos, sem eliminar as seis respostas de concordância válidas dessa avaliação. Para cada campo geral, portanto, houve três respostas válidas: duas notas 5 e uma nota 4, com média descritiva de 4,67 e mediana 5. Esses números descrevem somente os registros disponíveis e não estimam satisfação populacional.
+
+\begin{table}[htbp]
+\centering
+\caption{Respostas às afirmações de concordância, após seleção por conta}
+\label{tab:likert_novembro}
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}p{\dimexpr0.53\linewidth-8\tabcolsep\relax}rrrrrr@{}}
+\hline
+\textbf{Afirmação resumida} & \textbf{N1} & \textbf{N2} & \textbf{N3} & \textbf{N4} & \textbf{Média} & \textbf{Med.} \\
+\hline
+Carteirinha precisa de informações mais claras e completas & 1 & 2 & 2 & 4 & 2,25 & 2 \\
+Vacinas precisam apresentar melhor datas, clínica e situação & 1 & 2 & 2 & 2 & 1,75 & 2 \\
+Viagens precisam organizar melhor checklist e documentos & 1 & 1 & 1 & 1 & 1,00 & 1 \\
+Mais campos opcionais na carteirinha ajudariam na identificação & 2 & 2 & 4 & 4 & 3,00 & 3 \\
+Alertas, filtros e destaque para vacinas atrasadas seriam úteis & 1 & 4 & 5 & 5 & 3,75 & 4,5 \\
+Checklist por pet com dados e lembretes ajudaria no planejamento & 1 & 4 & 5 & 5 & 3,75 & 4,5 \\
+\hline
+\end{tabular}
+\par\vspace{2pt}
+{\footnotesize\raggedright Fonte: Elaborado pelo autor a partir das avaliações consultadas em 4 de novembro de 2026. Cada linha possui quatro respostas. Médias são sínteses descritivas de itens ordinais, acompanhadas das respostas individuais e medianas.\par}
+\end{table}
+
+A Tabela~\ref{tab:likert_novembro} mostra discordância total dos quatro registros quanto à afirmação de que a organização de viagens precisava melhorar. Isso não significa rejeição a novas funcionalidades: na afirmação sobre utilidade de checklist por pet, três contas concordaram parcial ou totalmente e uma discordou totalmente. O mesmo padrão apareceu no item sobre alertas de vacinas, com notas 4, 5 e 5 nos registros favoráveis e nota 1 no restante. A concordância com incrementos pode coexistir com baixa concordância com uma deficiência geral da tela atual. Para os campos opcionais da carteira, as respostas se dividiram entre duas discordâncias parciais e duas concordâncias parciais, sem posição uniforme.
+
+Não foram realizados testes de significância, inferência populacional ou avaliação psicométrica do instrumento. A distribuição individual e as medianas ajudam a explicitar a heterogeneidade do pequeno conjunto. Também não se atribuiu nota de severidade de Nielsen a partir das notas de concordância: opinião sobre uma melhoria e severidade observada de um problema são medidas distintas.
+
+\subsubsection{Comentários e transformação em requisitos}
+
+N1 não acrescentou comentários textuais. N2 sugeriu uma área de notificações para alertar sobre vencimentos e valorizou a organização antecipada de uma futura viagem. N3 pediu que fossem apresentadas todas as vacinas vencidas, e não apenas uma; nos outros comentários, informou não ter sugestões naquele momento. N4 solicitou um resumo mais informativo das vacinas vencidas, exemplificando a apresentação de dois nomes e da quantidade restante. Também considerou úteis os alertas e sugeriu selecionar vários pets para uma viagem, escolher entre checklist geral ou separado e acrescentar itens relacionados a necessidades específicas.
+
+Os comentários foram categorizados por seu conteúdo, preservando o significado mesmo quando preenchidos em campo associado a outro assunto. Por exemplo, a solicitação de mostrar todas as vacinas vencidas foi registrada em um comentário da seção sobre carteirinha, mas descreve um requisito de apresentação da informação vacinal. Essa distinção evita interpretar o nome do campo como substituto da leitura do relato.
+
+A priorização considerou especificidade do pedido e relação com as tarefas já implementadas. As solicitações resultaram em três frentes: visibilidade dos prazos, síntese das pendências e flexibilidade do planejamento de viagens. Não se concluiu que todos os usuários necessitariam das mesmas funções. A Tabela~\ref{tab:rastreabilidade_feedbacks} relaciona as manifestações às alterações realizadas na revisão do aplicativo.
+
+\begin{table}[htbp]
+\centering
+\caption{Rastreabilidade entre comentários e alterações do aplicativo}
+\label{tab:rastreabilidade_feedbacks}
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}p{\dimexpr0.28\linewidth-2\tabcolsep\relax}p{\dimexpr0.62\linewidth-2\tabcolsep\relax}p{0.10\linewidth}@{}}
+\hline
+\textbf{Necessidade relatada} & \textbf{Alteração implementada} & \textbf{Fonte} \\
+\hline
+Lembrar vencimentos & Central de avisos de vacinas e documentos, com vencidos, próximos 30 dias, filtros por categoria e acesso ao registro. & N2, N4 \\
+Mostrar todas as vacinas vencidas & Listagem individual das pendências e síntese na carteira com quantidade, dois nomes e indicação das demais; ausência de registros não aparece como situação em dia. & N3, N4 \\
+Preparar futuras viagens & Documentos do pet reunidos na tela de viagem e avisos de viagens nos próximos 30 dias com checklist pendente. & N2 \\
+Organizar vários pets & Seleção de acompanhantes no plano de viagem, com escolha entre listas individuais e checklist compartilhado para o grupo selecionado. & N4 \\
+Contemplar necessidades específicas & Inclusão e remoção de itens adicionais do checklist e campo de anotações; marcações compartilhadas se propagam somente ao grupo. & N4 \\
+\hline
+\end{tabular}
+\par\vspace{2pt}
+{\footnotesize\raggedright Fonte: Elaborado pelo autor. As alterações representam resposta de desenvolvimento aos comentários, sem comprovação de melhora de usabilidade após a mudança.\par}
+\end{table}
+
+Os avisos foram implementados no interior da aplicação e calculados com base nas datas e nos dados disponíveis no dispositivo. O prazo do dia corrente é apresentado como vencimento no dia, e registros sem data válida não são classificados como regulares. O recurso não representa envio de notificações ao sistema operacional com o aplicativo fechado. Seu alcance depende da completude dos registros, da data do dispositivo e da atualização dos dados, inclusive da sincronização quando o uso ocorre em mais de um aparelho.
+
+A revisão foi acompanhada de seis testes automatizados, executados com dados fictícios, para regras de data, contagem de vacinas vencidas, manutenção de todas as pendências na lista, seleção de lembretes de documentos e viagens, propagação de marcações e remoções no grupo e preservação de listas após serialização em JSON. Esses testes verificam regras técnicas e não equivalem a uma nova avaliação com participantes. As melhorias posteriores à coleta não receberam notas de satisfação retrospectivas, nem foram apresentadas como responsáveis por aumento comprovado de adesão à vacinação, redução de esquecimentos ou maior facilidade de uso.
+
