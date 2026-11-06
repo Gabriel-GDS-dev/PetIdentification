@@ -325,6 +325,9 @@ let nearbyClinics = [];
 let clinicsStatus = "idle";
 let clinicsError = "";
 let clinicLocationLabel = "";
+let clinicOrigin = null;
+let clinicSearchContext = "";
+let clinicRequestId = 0;
 let cepLookupTimer = null;
 let signaturePadCleanup = null;
 let localStorageWarningShown = false;
@@ -479,7 +482,8 @@ document.addEventListener("click", (event) => {
     if (name === "reset-demo") resetDemo();
     if (name === "maps") openMaps(action.dataset.query);
     if (name === "lookup-cep") lookupCep(action.closest("form"));
-    if (name === "refresh-clinics") loadNearbyClinics(true);
+    if (name === "refresh-clinics") loadNearbyClinics("address");
+    if (name === "clinics-gps") loadNearbyClinics("gps");
   }
 
   const starButton = event.target.closest("[data-rating-value]");
@@ -517,6 +521,7 @@ document.addEventListener("input", (event) => {
     const digits = onlyDigits(event.target.value).slice(0, 8);
     const form = event.target.closest("form");
     event.target.value = digits.replace(/^(\d{5})(\d)/, "$1-$2");
+    for (const name of ["address", "neighborhood", "city", "state"]) setFormValue(form, name, "");
     setFormValue(form, "latitude", "");
     setFormValue(form, "longitude", "");
     setFormValue(form, "locationSource", "");
@@ -1289,10 +1294,19 @@ function documentAttachmentForServer(attachment) {
 
 function render() {
   applyTheme();
+  if (state.currentView === "clinics" && clinicSearchContext !== currentClinicSearchContext()) {
+    clinicsStatus = "idle";
+    clinicLocationLabel = "";
+    clinicOrigin = null;
+  }
   app.innerHTML = isAuthenticated() ? layout(screenTemplate()) : authView();
   removeLegacyPetRecordActions();
   if (state.currentView === "wallet") requestAnimationFrame(() => setWalletSlide(walletSlideIndex, false));
-  if (state.currentView === "clinics" && clinicsStatus === "idle") requestAnimationFrame(() => loadNearbyClinics());
+  if (isAuthenticated() && state.currentView === "clinics" && clinicsStatus === "idle") {
+    requestAnimationFrame(() => {
+      if (state.currentView === "clinics" && clinicsStatus === "idle") loadNearbyClinics("address");
+    });
+  }
 }
 
 function applyTheme() {
@@ -2320,12 +2334,11 @@ function renderTravel() {
 
 function clinicsView() {
   const address = ownerAddress();
-  const query = encodeURIComponent(`veterinária perto de ${address || state.owner.city || "mim"}`);
   return `
     <div class="page-head">
       <span class="eyebrow">Localização do tutor</span>
       <h1>Veterinárias próximas</h1>
-      <p class="muted">Clínicas reais encontradas perto da sua localização atual ou do endereço cadastrado.</p>
+      <p class="muted">Busque clínicas perto do endereço cadastrado ou da sua localização atual.</p>
     </div>
     <div class="map-strip" aria-hidden="true">
       <span class="map-pin" style="left: 16%; top: 48%;"><span>⌂</span></span>
@@ -2338,12 +2351,13 @@ function clinicsView() {
           <div class="owner-avatar">${initials(state.owner.name)}</div>
           <div>
             <h2>${escapeHTML(address || "Endereço ainda não cadastrado")}</h2>
-            <p class="muted small">${escapeHTML(clinicLocationLabel || "O app pedirá acesso à localização e usará o CEP como alternativa.")}</p>
+            <p class="muted small" id="clinicLocation">${escapeHTML(clinicLocationLabel || "A busca começa pelo endereço cadastrado.")}</p>
           </div>
         </div>
         <div class="button-row" style="margin-top: 14px;">
-          <button class="primary-button" type="button" data-action="refresh-clinics">⌖ Atualizar busca</button>
-          <button class="secondary-button" type="button" data-action="maps" data-query="${query}">Abrir no mapa</button>
+          <button class="primary-button" type="button" data-action="refresh-clinics">⌖ Buscar pelo endereço</button>
+          <button class="secondary-button" type="button" data-action="clinics-gps">Usar minha localização</button>
+          <button class="secondary-button" type="button" id="clinicMap" data-action="maps" data-query="${clinicMapQuery()}">Abrir no mapa</button>
           <button class="secondary-button" type="button" data-action="edit-owner">Editar endereço</button>
         </div>
       </div>
@@ -2361,7 +2375,7 @@ function clinicsListTemplate() {
         ${loadingDots()}
         <div>
           <h2>Buscando veterinárias próximas</h2>
-          <p class="muted small">Consultando sua localização, endereço cadastrado e dados do OpenStreetMap.</p>
+          <p class="muted small">Buscando clínicas no OpenStreetMap.</p>
         </div>
       </div>
     `;
@@ -2376,7 +2390,6 @@ function clinicsListTemplate() {
           <p class="muted">${escapeHTML(clinicsError || "Confira o CEP ou permita o acesso à localização.")}</p>
         </div>
         <div class="button-row">
-          <button class="primary-button" type="button" data-action="refresh-clinics">Tentar novamente</button>
           <button class="secondary-button" type="button" data-action="edit-owner">Conferir CEP</button>
         </div>
       </div>
@@ -2384,7 +2397,7 @@ function clinicsListTemplate() {
   }
 
   if (!nearbyClinics.length) {
-    return emptyState("⌖", "Nenhuma veterinária encontrada", "Não encontramos locais cadastrados perto desse endereço. Confira o CEP ou tente atualizar a busca.", "Tentar novamente", "refresh-clinics");
+    return emptyState("⌖", "Nenhuma veterinária encontrada", "O OpenStreetMap não retornou clínicas dentro do raio indicado.");
   }
 
   return `
@@ -2402,70 +2415,65 @@ function clinicsListTemplate() {
 function renderClinicsList() {
   const target = document.querySelector("#clinicsList");
   if (target) target.innerHTML = clinicsListTemplate();
+  const description = document.querySelector("#clinicLocation");
+  if (description) description.textContent = clinicLocationLabel;
+  const map = document.querySelector("#clinicMap");
+  if (map) map.dataset.query = clinicMapQuery();
 }
 
-async function loadNearbyClinics(force = false) {
-  if (clinicsStatus === "loading") return;
-  if (!force && clinicsStatus === "loaded") return;
+function currentClinicSearchContext() {
+  return JSON.stringify([state.auth.currentUserEmail, tutorAddressPayload()]);
+}
 
+async function loadNearbyClinics(source) {
+  const requestId = ++clinicRequestId;
+  const context = currentClinicSearchContext();
+  const isCurrent = () => requestId === clinicRequestId && context === currentClinicSearchContext();
+  clinicSearchContext = context;
   clinicsStatus = "loading";
   clinicsError = "";
+  clinicOrigin = null;
+  clinicLocationLabel = source === "gps" ? "Obtendo sua localização atual…" : "Localizando o endereço cadastrado…";
   renderClinicsList();
 
   try {
-    const location = await resolveTutorLocation();
-    const payload = await apiRequest(`/api/clinics/nearby?${clinicSearchParams(location)}`);
+    const location = source === "gps" ? await currentGpsLocation() : tutorAddressPayload();
+    if (!isCurrent()) return;
+    const payload = await apiRequest(`/api/clinics/nearby?${clinicSearchParams(source, location)}`);
+    if (!isCurrent()) return;
     nearbyClinics = Array.isArray(payload.clinics) ? payload.clinics : [];
-    updateOwnerCoordinates(payload.origin, location.source);
-    clinicLocationLabel = clinicLocationDescription(payload.origin || location, payload.radius);
+    clinicOrigin = payload.origin;
+    clinicLocationLabel = clinicLocationDescription(clinicOrigin, payload.radius);
     clinicsStatus = "loaded";
   } catch (error) {
+    if (!isCurrent()) return;
     nearbyClinics = [];
     clinicsStatus = "error";
     clinicsError = error.message || "Não foi possível consultar a localização.";
+    clinicLocationLabel = source === "gps" ? "Busca pela localização atual." : "Busca pelo endereço cadastrado.";
   }
 
-  if (state.currentView === "clinics") {
-    const description = document.querySelector(".profile-strip .muted");
-    if (description && clinicLocationLabel) description.textContent = clinicLocationLabel;
-    renderClinicsList();
-  }
+  if (state.currentView === "clinics") renderClinicsList();
 }
 
-async function resolveTutorLocation() {
+async function currentGpsLocation() {
   if (navigator.geolocation && window.isSecureContext) {
     try {
       const position = await new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
           timeout: 7000,
-          maximumAge: 10 * 60 * 1000
+          maximumAge: 0
         });
       });
       const latitude = position.coords.latitude;
       const longitude = position.coords.longitude;
-      state.owner.latitude = latitude;
-      state.owner.longitude = longitude;
-      state.owner.locationSource = "gps";
-      saveState();
-      return { latitude, longitude, source: "gps" };
+      return { lat: latitude, lon: longitude };
     } catch {
-      // O CEP cadastrado é usado quando o tutor não autoriza ou o GPS está indisponível.
+      throw new Error("Não foi possível obter sua localização atual. Confira a permissão do navegador ou busque pelo endereço cadastrado.");
     }
   }
-
-  const latitude = Number(state.owner.latitude);
-  const longitude = Number(state.owner.longitude);
-  if (hasUsableCoordinates(latitude, longitude)) {
-    return { latitude, longitude, source: state.owner.locationSource || "cep" };
-  }
-
-  const address = tutorAddressPayload();
-  if (address.cep || address.address || address.neighborhood || address.city) {
-    return { ...address, source: address.cep ? "cep" : "address" };
-  }
-
-  throw new Error("Permita a localização do celular ou cadastre um CEP/endereço válido nos dados do tutor.");
+  throw new Error("A localização atual está indisponível neste navegador. Busque pelo endereço cadastrado.");
 }
 
 function loadingDots() {
@@ -2476,15 +2484,10 @@ function loadingDots() {
   `;
 }
 
-function clinicSearchParams(location) {
-  const params = new URLSearchParams({ radius: "12000" });
-  if (location.source) params.set("source", location.source);
-  if (hasUsableCoordinates(location.latitude, location.longitude)) {
-    params.set("lat", location.latitude);
-    params.set("lon", location.longitude);
-  }
-  for (const [key, value] of Object.entries(tutorAddressPayload())) {
-    if (value) params.set(key, value);
+function clinicSearchParams(source, location) {
+  const params = new URLSearchParams({ source, radius: "5000" });
+  for (const [key, value] of Object.entries(location)) {
+    if (value !== "") params.set(key, value);
   }
   return params.toString();
 }
@@ -2494,36 +2497,25 @@ function tutorAddressPayload() {
     cep: onlyDigits(state.owner.zipCode || ""),
     address: state.owner.address || "",
     addressNumber: state.owner.addressNumber || "",
-    addressComplement: state.owner.addressComplement || "",
     neighborhood: state.owner.neighborhood || "",
     city: state.owner.city || "",
     state: state.owner.state || ""
   };
 }
 
-function updateOwnerCoordinates(origin, fallbackSource = "") {
-  if (!hasUsableCoordinates(origin?.latitude, origin?.longitude)) return;
-  const source = origin.source || fallbackSource || state.owner.locationSource || "address";
-  if (state.owner.latitude === origin.latitude && state.owner.longitude === origin.longitude && state.owner.locationSource === source) return;
-  state.owner.latitude = origin.latitude;
-  state.owner.longitude = origin.longitude;
-  state.owner.locationSource = source;
-  saveState();
+function clinicLocationDescription(origin, radiusMeters) {
+  const radiusNote = `Raio de ${radiusMeters / 1000} km.`;
+  if (origin?.source === "gps") return `Localização atual. ${radiusNote}`;
+  if (origin?.source === "cep") return `Localização aproximada pelo CEP ${state.owner.zipCode}. ${radiusNote}`;
+  if (origin?.precision === "street") return `Localização aproximada pela rua cadastrada. ${radiusNote}`;
+  if (origin?.precision === "neighborhood") return `Localização aproximada pelo bairro cadastrado. ${radiusNote}`;
+  if (origin?.precision === "city") return `Localização aproximada pela cidade cadastrada. ${radiusNote}`;
+  return `Endereço cadastrado. ${radiusNote}`;
 }
 
-function clinicLocationDescription(origin = {}, radiusMeters = 12000) {
-  const radius = Number(radiusMeters || 0);
-  const radiusNote = radius > 12000 ? ` Busca ampliada para até ${Math.round(radius / 1000)} km.` : "";
-  if (origin.source === "gps") return `Usando a localização atual do celular.${radiusNote}`;
-  if (origin.source === "cep") return `Usando o CEP ${state.owner.zipCode || "cadastrado"}.${radiusNote}`;
-  if (origin.source === "coordinates") return `Usando a última localização salva.${radiusNote}`;
-  return `Usando o endereço cadastrado.${radiusNote}`;
-}
-
-function hasUsableCoordinates(latitude, longitude) {
-  const lat = Number(latitude);
-  const lon = Number(longitude);
-  return Number.isFinite(lat) && lat >= -90 && lat <= 90 && Number.isFinite(lon) && lon >= -180 && lon <= 180;
+function clinicMapQuery() {
+  const place = clinicOrigin?.source === "gps" ? `${clinicOrigin.latitude},${clinicOrigin.longitude}` : ownerAddress();
+  return encodeURIComponent(`veterinária perto de ${place || "mim"}`);
 }
 
 function feedbackView() {
@@ -3342,6 +3334,7 @@ async function lookupCep(form) {
 
   try {
     const address = await apiRequest(`/api/address/cep?cep=${cep}`);
+    if (onlyDigits(input?.value || "") !== cep) return;
     setFormValue(form, "zipCode", address.zipCode || cep.replace(/^(\d{5})(\d{3})$/, "$1-$2"));
     setFormValue(form, "address", address.address);
     setFormValue(form, "neighborhood", address.neighborhood);
@@ -3353,7 +3346,7 @@ async function lookupCep(form) {
     if (status) status.textContent = "Endereço encontrado. Agora informe somente número e complemento.";
     form.querySelector("[name='addressNumber']")?.focus();
   } catch (error) {
-    if (status) status.textContent = error.message || "Não foi possível consultar o CEP.";
+    if (status && onlyDigits(input?.value || "") === cep) status.textContent = error.message || "Não foi possível consultar o CEP.";
   } finally {
     if (button) button.disabled = false;
   }
@@ -4010,9 +4003,11 @@ async function handleForm(form) {
 
   if (type === "owner") {
     state.owner = { ...state.owner, ...data };
+    clinicRequestId++;
     clinicsStatus = "idle";
     nearbyClinics = [];
     clinicLocationLabel = "";
+    clinicOrigin = null;
     notify("Dados do tutor atualizados.");
   }
 
