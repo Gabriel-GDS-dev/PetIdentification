@@ -1,0 +1,785 @@
+PÁGINA 1
+REGISTRO DIGITAL ANIMAL: DIGITALIZANDO A IDENTIFICAÇÃO E
+CONTROLE DE VACINAÇÃO DE ANIMAIS DE ESTIMAÇÃO
+Gabriel Goulart de Souza1, Diorgines Mattos Machado2, Allan Farias
+Favaro3
+Resumo: A dispersão de dados de identificação, vacinação e documen-
+tos clínicos dificulta a organização do histórico de animais de estimação.
+Este trabalho teve como objetivo desenvolver e avaliar o funcionamento de
+uma aplicação multiplataforma para cadastrar, organizar e consultar esses
+registros. A aplicação Registro Digital Animal foi desenvolvida como apli-
+cação web progressiva, com autenticação, sincronização e persistência no
+PostgreSQL. A avaliação reuniu 15 cenários funcionais de caixa-preta, dois
+retornos anteriores preservados, sugestões de melhoria de quatro contas
+e uma nova avaliação funcional de 11 contas, selecionada entre 17 envios
+da versão 3 do formulário. Os cenários foram registrados como aprova-
+dos nas condições avaliadas. As 88 respostas aos oito itens funcionais
+apresentaram médias descritivas entre 4,55 e 5,00, com uma discordância
+sobre a identificação da situação vacinal e uma resposta neutra sobre nave-
+gação, acompanhada de relato de dificuldade. Os comentários anteriores
+orientaram avisos internos, síntese de vacinas vencidas e planejamento de
+viagens com vários pets.
+A contribuição consiste no artefato e na aná-
+lise exploratória de funcionamento, necessidades e percepções relatadas.
+Contas não comprovam participantes independentes, e a nova coleta não
+constitui comparação controlada das melhorias. Não foram mensurados
+benefícios clínicos ou redução do uso de documentos físicos.
+Palavras-chave: animais de estimação; registro digital; vacinação animal;
+aplicação web progressiva; testes funcionais.
+1Curso de Ciência da Computação, Universidade do Extremo Sul Catarinense (Unesc),
+Criciúma - Santa Catarina - Brasil. gabriel.gsouzza6@unesc.net
+2Coorientador(a), Curso de Ciência da Computação, Universidade do Extremo Sul Catari-
+nense (Unesc), Criciúma - Santa Catarina - Brasil. diorginesmattos@unesc.net
+3Orientador(a), Curso de Ciência da Computação, Universidade do Extremo Sul Catari-
+nense (Unesc), Criciúma - Santa Catarina - Brasil. allanfavaro@gmail.com
+
+
+PÁGINA 2
+ABSTRACT: Scattered identification, vaccination and clinical do-
+cuments make it difficult to organize companion animals’ records. This study
+aimed to develop and evaluate a cross-platform application for registering,
+organizing and consulting these records. Registro Digital Animal was deve-
+loped as a progressive web application with authentication, synchronization
+and PostgreSQL persistence. The evaluation combined 15 black-box functi-
+onal scenarios, two preserved earlier responses, improvement suggestions
+from four accounts and a new functional assessment from 11 accounts, se-
+lected from 17 submissions of questionnaire version 3. The scenarios were
+recorded as passed under the evaluated conditions. The 88 responses to
+eight functional items yielded descriptive means ranging from 4.55 to 5.00,
+with one disagreement about identifying vaccination status and one neutral
+navigation response accompanied by a report of difficulty. Earlier comments
+informed in-app reminders, overdue-vaccination summaries and multi-pet
+travel planning. The contribution comprises the software artifact and an ex-
+ploratory analysis of operation, needs and reported perceptions. Accounts
+do not establish independent participants, and the new collection is not a
+controlled comparison of improvements. Clinical benefits and reductions in
+the use of physical documents were not measured.
+Keywords: companion animals; digital records; animal vaccination; pro-
+gressive web application; functional testing.
+1
+INTRODUÇÃO
+A consolidação da família multiespécie ampliou a importância
+dos animais de estimação no núcleo familiar e a preocupação dos tutores
+com sua saúde e bem-estar (BOLSON; BOLSON, 2022; VIEIRA; MOSSOI,
+2020). Esse contexto exige organizar informações de identificação e saúde,
+para as quais aplicativos e sistemas veterinários oferecem alternativas de
+registro e consulta (MORAES et al., 2024). A identificação individual tam-
+bém contribui para o acompanhamento do comportamento e das condições
+dos animais (VIDAL et al., 2021).
+Dados de vacinação, exames, consultas e medicamentos com-
+põem o histórico de saúde. A identificação e a rastreabilidade auxiliam o
+monitoramento e o controle de doenças infecciosas e zoonoses (MURPHY
+et al., 2008), enquanto a vacinação constitui medida preventiva relevante,
+inclusive contra a raiva (MOUTINHO et al., 2018).
+Entretanto, caderne-
+tas e fichas em papel estão sujeitas a perdas, danos e deterioração (BOL-
+2
+
+
+PÁGINA 3
+SON; BOLSON, 2022), dificultando a consulta em atendimentos, viagens
+ou emergências. A digitalização foi adotada neste trabalho para reunir es-
+ses registros em um ambiente consultável pelo tutor.
+Soluções existentes apresentam focos distintos.
+Prontuários
+eletrônicos veterinários demonstram a viabilidade da informatização, mas
+se dirigem principalmente às clínicas (ISKANDAR; ISMAWATIE; IBRAHIM,
+2023).
+Plataformas de cadastro e controle de vacinação centralizam
+serviços, mantendo oportunidades relacionadas à mobilidade e ao acesso
+sem internet (VIEIRA et al., 2025). A comunicação por aproximação com-
+plementa métodos tradicionais de identificação (SARTORI; MEDEIROS,
+2018), e a rastreabilidade permite acompanhar origem, movimentações e
+registros sanitários (ZHAO et al., 2020). Isoladamente, essas tecnologias
+não reúnem necessariamente os documentos utilizados pelo tutor no
+cotidiano.
+Essa diversidade de propostas permite delimitar o problema: in-
+formações de identificação, vacinação e documentos clínicos podem per-
+manecer distribuídas entre papéis, estabelecimentos e sistemas. A pro-
+posta se justifica pela necessidade de organizá-las em uma interface aces-
+sível ao tutor, considerando mobilidade, consulta local e continuidade do
+acesso. No domínio computacional, o trabalho aplica desenvolvimento mul-
+tiplataforma, modelagem relacional e mecanismos de persistência e sincro-
+nização.
+Apresenta-se, assim, a aplicação Registro Digital Animal, com
+arquitetura de Progressive Web App (PWA), acesso pelo navegador e ins-
+talação no dispositivo. O cache e a persistência local permitem consultar
+dados previamente armazenados sem conexão. O objetivo geral foi de-
+senvolver e avaliar o funcionamento de uma aplicação multiplataforma para
+cadastrar, organizar e consultar registros de identificação, vacinação e do-
+cumentos clínicos de animais de estimação. A redução da dependência
+de documentos físicos é um benefício pretendido, não mensurado neste
+estudo.
+2
+MATERIAIS E MÉTODOS
+A pesquisa é aplicada, pois buscou uma solução tecnológica
+para um problema prático de gerenciamento de informações de saúde e
+identificação de animais de estimação. Tem abordagem qualitativa e ca-
+ráter exploratório e descritivo, ao investigar as tecnologias empregadas na
+digitalização de registros veterinários e descrever o desenvolvimento e a
+3
+
+
+PÁGINA 4
+modelagem da aplicação. O estudo foi orientado pela construção e ava-
+liação de um artefato computacional, em aproximação à Design Science
+Research (DSR), que relaciona a identificação de um problema à definição
+de objetivos, ao desenvolvimento e à avaliação de uma solução (PEFFERS
+et al., 2007). Aqui, o problema foi delimitado pela organização e consulta
+dos registros dos animais; os requisitos foram materializados nos módulos
+de cadastro, carteira, vacinação, documentos e acesso local; o artefato foi
+implementado como aplicação multiplataforma; e sua avaliação foi feita por
+cenários funcionais e retornos de participantes do setor veterinário. Esse
+encadeamento descreve apenas as atividades documentadas, sem pressu-
+por etapas adicionais ou ciclos experimentais não registrados.
+2.1
+DESENVOLVIMENTO DO SISTEMA
+O desenvolvimento produziu a aplicação Registro Digital Animal,
+voltada ao uso cotidiano do tutor. Os requisitos contemplam cadastro de
+usuários e animais, organização de vacinas e documentos, carteira digi-
+tal, planejamento de viagens e consulta de estabelecimentos veterinários,
+com interface para computadores e dispositivos móveis, persistência local e
+sincronização com o servidor. O código-fonte está em repositório público4.
+2.1.1
+Arquitetura e Tecnologias do Sistema
+O sistema adota arquitetura cliente-servidor, separando a inter-
+face, o processamento das requisições e a persistência dos dados: uma
+Progressive Web App (PWA) no frontend, uma API REST no backend e um
+banco relacional PostgreSQL 18, além de serviços externos em funcionali-
+dades específicas. A Figura 1 sintetiza a interação entre usuário, interface,
+serviços, banco de dados e recursos externos. O tutor acessa a aplicação
+pelo navegador ou pela PWA instalada; as ações são encaminhadas à API
+REST, que aplica as regras do sistema e opera o banco, enquanto o ar-
+mazenamento local e a sincronização mantêm as informações essenciais
+disponíveis com conectividade limitada ou ausente.
+A Figura 2 apresenta as tecnologias por camada. No frontend,
+são usados HTML5, CSS3 e JavaScript puro, com manifesto, service wor-
+ker, cache e armazenamento local para os recursos de PWA. O backend
+é escrito em JavaScript sobre Node.js, organizado como API REST, com
+NPM no gerenciamento das dependências. A persistência usa PostgreSQL
+18, com conexão parametrizada por variáveis de ambiente. A infraestrutura
+4Disponível em: <https://github.com/Gabriel-GDS-dev/PetIdentification>. Acesso em: 28
+out. 2026.
+4
+
+
+PÁGINA 5
+Figura 1 - Fluxograma da arquitetura e do funcionamento do sistema
+Registro Digital Animal
+Fonte: Elaborado pelo autor com auxílio do Codex GPT-5.5 (2026).
+5
+
+
+PÁGINA 6
+da etapa de avaliação utilizou Render Postgres e Render Web Service, e o
+projeto também contém configuração para publicação na Vercel e execução
+local. A coleta complementar de novembro utilizou PostgreSQL pela inte-
+gração Prisma Postgres da Vercel, distinguindo-se da infraestrutura inicial.
+A indisponibilidade posterior do banco hospedado limitou a recuperação de
+parte dos retornos da pesquisa de campo, como descrito adiante.
+Figura 2 - Arquitetura e tecnologias utilizadas no sistema Registro Digital
+Animal
+Fonte: Elaborado pelo autor.
+As integrações externas incluem a API ViaCEP, para preenchi-
+mento automático de endereços, e os recursos de GPS e OpenStreetMap,
+para localizar clínicas veterinárias próximas ao tutor. No desenvolvimento
+e nos testes, foram usados Windows, os navegadores Google Chrome e
+Brave, dispositivos Android, rede local Wi-Fi, Android Debug Bridge (ADB)
+e túnel HTTPS da Cloudflare.
+A aplicação é composta por módulos de gerenciamento das in-
+formações do tutor e do animal. O módulo de usuários permite cadastro
+e autenticação via API, com senhas armazenadas em formato de hash. O
+módulo de animais registra e edita os dados de identificação, incluindo o
+upload de foto e o preenchimento automático do endereço a partir do CEP
+consultado na API ViaCEP, permanecendo sob responsabilidade do usuário
+o preenchimento do número e do complemento.
+O sistema conta ainda com uma carteira digital do animal visuali-
+zável em formato frente e verso, recursos para captura de assinatura digital
+6
+
+
+PÁGINA 7
+diretamente na aplicação, upload de documentos do pet em imagem ou
+PDF e geração ou download da carteira e de seus anexos compilados em
+PDF. Para auxiliar em situações de emergência e localização, a aplicação
+integra a geolocalização por GPS do tutor e os dados do OpenStreetMap
+para listar clínicas veterinárias próximas.
+2.1.2
+Banco de Dados
+A Figura 3 apresenta um recorte de seis tabelas do núcleo ca-
+dastral da aplicação. A implementação contém ainda estruturas auxiliares
+para itens de viagem, avaliações, estado sincronizado, anexos, sincroniza-
+ções em partes e eventos de uso, de modo que o diagrama não representa
+a totalidade do esquema. As seis estruturas representadas são:
+• pet_app_users: informações de cadastro e autenticação, incluindo
+nome, e-mail, telefone e hash da senha;
+• pet_owners: dados do tutor vinculados ao usuário, como CPF, en-
+dereço, coordenadas de localização e contato de emergência;
+• pet_pets: identificação do animal, como espécie, raça, sexo, nasci-
+mento, peso, microchip, temperamento e alergias;
+• pet_vaccines: nome da vacina, dose, data de aplicação, data pre-
+vista da próxima dose, clínica, veterinário e lote;
+• pet_documents: título, categoria, data, validade e dados do anexo
+de cada documento;
+• pet_travel_plans: destino, data da viagem, meio de transporte e
+animal selecionado.
+2.2
+METODOLOGIA DE AVALIAÇÃO
+A avaliação compreendeu a verificação funcional de caixa-preta
+e a análise exploratória de retornos do setor veterinário. A verificação fun-
+cional comparou ações e resultados esperados; as observações sobre cla-
+reza das telas e navegação foram descritivas e não constituíram avaliação
+padronizada de usabilidade. A análise de retornos examinou utilidades per-
+cebidas e dificuldades relatadas, sem estimar aceitação populacional.
+7
+
+
+PÁGINA 8
+Figura 3 - Recorte do núcleo cadastral do banco PostgreSQL da aplicação
+Registro Digital Animal
+Fonte: Elaborado pelo autor.
+8
+
+
+PÁGINA 9
+2.2.1
+Procedimento e cenários dos testes
+Os testes foram executados em computadores com Windows,
+nos navegadores Chrome e Brave, e em dispositivos Android, com acesso
+móvel por Wi-Fi local, depuração USB com ADB e túnel HTTPS da Cloud-
+flare. Para cada cenário, comparou-se o comportamento observado ao es-
+perado; a classificação Passou correspondeu à execução da tarefa prevista
+e à manutenção dos dados envolvidos.
+Foram organizados 15 cenários (F01 a F15), descritos na Ta-
+bela 1, abrangendo cadastro e autenticação, edição do animal, carteira e
+documentos, geolocalização, acesso móvel, consulta offline e sincroniza-
+ção. Em cada tarefa, verificaram-se o resultado esperado e a manutenção
+dos dados envolvidos, como vinculação de anexos ao pet, legibilidade da
+assinatura, consulta aos registros locais e persistência após restabelecer
+a conexão. Os registros não constituem bateria exaustiva de casos ne-
+gativos, concorrência ou indisponibilidade de serviços, nem documentam
+tempos, número de tentativas ou avaliações independentes de usabilidade.
+A escala de severidade de Nielsen classifica problemas de usa-
+bilidade por frequência, impacto e persistência (NIELSEN, 1994). Como
+não foi preservado um protocolo de julgamento independente desses fato-
+res por cenário, não foram atribuídas notas de severidade, e a aprovação
+funcional foi mantida separada dos problemas relatados pelos participan-
+tes.
+2.2.2
+Procedimento da pesquisa de campo
+O convite foi dirigido a clínicas, estabelecimentos e profissionais
+do setor animal, identificados pelo Google Maps em Criciúma e pela plata-
+forma Casa dos Dados para outros municípios, em seleção não probabilís-
+tica. A planilha de acompanhamento registrou 96 contatos, com convites
+entre 11 e 18 de setembro de 2026; predominaram localidades de Santa
+Catarina, mas um contato era de Fortaleza, e por isso o conjunto não foi tra-
+tado como exclusivamente catarinense. O contato ocorreu pelo WhatsApp,
+com apresentação do pesquisador; aos que aceitaram, foram enviados o
+endereço do aplicativo e um vídeo de orientação, solicitando opinião sobre
+a experiência de uso, informações ausentes e melhorias.
+Os 96 contatos resultaram em 13 aceites, 80 sem resposta e três
+sem interesse. Aceitar o convite, receber o material, cadastrar-se e enviar
+uma avaliação foram tratados como eventos distintos. A planilha indicou
+dois feedbacks recebidos (21 de setembro e 7 de outubro de 2026); en-
+9
+
+
+PÁGINA 10
+tre os demais aceites, dez ficaram pendentes e um registrou cadastro sem
+avaliação. O pesquisador informou ainda um terceiro retorno, armazenado
+no banco do Render e indisponível após a interrupção do serviço; ele não
+constava como recebido na planilha, e seu conteúdo não foi analisado. O
+corpus inicial foi composto pelos dois retornos preservados, identificados
+como R1 (avaliação estruturada salva pela aplicação, com notas e comen-
+tários) e R2 (relato textual livre de uma participante, que informou ter ca-
+dastrado seus animais), sem divulgação de nomes ou estabelecimentos.
+No formulário, os campos gerais registraram satisfação com as
+informações da carteira e avaliação do aplicativo; os itens de concordância
+trataram da necessidade de melhoria e da utilidade de aprimoramentos em
+carteira, vacinação e viagens, sem serem interpretados como satisfação.
+Os comentários foram agrupados por conteúdo (organização e identifica-
+ção; informação vacinal; viagens; localização de clínicas; atuação veteri-
+nária) e associados a R1 ou R2. Para esses dois retornos anteriores não
+foram produzidas estimativas estatísticas, e a categorização, feita por um
+único analista, não passou por concordância entre avaliadores.
+As consultas de novembro utilizaram as tabelas de avaliações do
+Prisma Postgres na Vercel, sem alteração dos registros. A extração inicial,
+de 4 de novembro, examinou sugestões de melhoria (versão 2). A atuali-
+zação consultada em 7 de novembro incluiu a versão 3, voltada às funções
+utilizadas. Selecionou-se o envio mais recente por conta dentro de cada
+versão, ordenado por data de envio e, em caso de empate, identificador.
+Essa separação preserva o significado dos enunciados e impede que uma
+nova avaliação substitua o histórico de outro instrumento. Os itens foram
+analisados individualmente por frequências, médias descritivas e media-
+nas, sem índice global ou inferência populacional. Zero nos campos gerais
+foi tratado como ausência; a opção Não utilizei, prevista na versão 3, seria
+contabilizada separadamente e excluída das médias. Os comentários foram
+agrupados por conteúdo por um único analista. Os conjuntos não foram vin-
+culados nominalmente ao recrutamento inicial nem constituem comparação
+controlada antes e depois.
+3
+RESULTADOS E DISCUSSÃO
+Esta seção apresenta os resultados dos cenários funcionais,
+os dois retornos anteriores e as coletas estruturadas de novembro, distin-
+guindo sugestões de melhoria de avaliações das funções utilizadas. As
+fontes não foram agregadas como uma única amostra de participantes.
+10
+
+
+PÁGINA 11
+3.1
+RESULTADOS DOS CENÁRIOS FUNCIONAIS
+A Tabela 1 apresenta os resultados dos 15 cenários. A classi-
+ficação expressa o resultado funcional registrado, sem equivalência com
+medida de usabilidade.
+Tabela 1 - Resultados registrados para os cenários funcionais do sistema
+ID
+Cenário de teste avaliado
+Resultado
+F01
+Cadastro de usuário e armazenamento de senha com hash Passou
+F02
+Autenticação do usuário e controle de sessão na API REST Passou
+F03
+Cadastro e edição de perfil de animal com upload de foto
+Passou
+F04
+Preenchimento automático de endereço via API ViaCEP a
+partir do CEP
+Passou
+F05
+Captura e salvamento de assinatura digital no formulário
+Passou
+F06
+Visualização interativa da carteira digital, com frente e verso Passou
+F07
+Upload e vinculação de documentos clínicos em imagem
+ou PDF
+Passou
+F08
+Geração e exportação da carteira digital consolidada em
+PDF
+Passou
+F09
+Captura de coordenadas de geolocalização via GPS móvel Passou
+F10
+Consulta de clínicas veterinárias próximas via OpenStreet-
+Map
+Passou
+F11
+Responsividade e navegação em desktop nos navegadores
+Chrome e Brave
+Passou
+F12
+Acesso móvel em Android via Wi-Fi, ADB e túnel Cloudflare Passou
+F13
+Armazenamento e execução de cache pelo Service Worker
+Passou
+F14
+Acesso e consulta offline aos dados da carteira e das vaci-
+nas
+Passou
+F15
+Sincronização offline-online de registros no banco Post-
+greSQL
+Passou
+Fonte: Elaborado pelo autor.
+Os 15 cenários foram registrados como aprovados nas condi-
+ções descritas. Os resultados abrangem os fluxos de cadastro, carteira
+e documentos (F01–F08), mobilidade e localização de clínicas (F09–F12),
+consulta offline e sincronização dos registros (F13–F15). A aprovação se
+restringe às tarefas previstas e aos ambientes avaliados: não demonstra
+ausência de falhas em outros cenários, confiabilidade em produção ou usa-
+bilidade generalizável. A consulta offline depende de dados previamente
+armazenados; serviços externos e envio ao servidor exigem conectividade.
+11
+
+
+PÁGINA 12
+3.2
+ANÁLISE DOS RETORNOS ANTERIORES PRESERVADOS DA
+PESQUISA DE CAMPO
+No acompanhamento inicial, o registro de recrutamento apresen-
+tou 13 aceites entre 96 contatos (13,5%), e somente dois tiveram feedback
+marcado como recebido. Esses números descrevem o acompanhamento
+dos convites e não medem satisfação ou utilização efetiva. A Tabela 2 re-
+sume as etapas documentadas.
+Tabela 2 - Situação dos contatos e dos retornos no acompanhamento
+inicial
+Etapa ou situação registrada
+Quantidade
+Contatos com convite registrado
+96
+Aceitaram participar
+13
+Sem resposta ao convite
+80
+Não interessados
+3
+Aceites com feedback marcado como recebido
+2
+Aceites com feedback pendente
+10
+Aceite com cadastro, sem feedback, conforme observação
+1
+Retornos preservados incluídos na análise
+2
+Retorno adicional informado, indisponível e excluído
+1
+Fonte: Elaborado pelo autor.
+A Tabela 3 relaciona os aspectos analisados aos registros que
+os sustentam. As descrições são menções individuais, sem indicação de
+prevalência entre profissionais veterinários.
+Em R1, os campos gerais apresentaram nota 5 para as informa-
+ções da carteira e nota 4 para a avaliação do aplicativo, em escala de 1
+a 5; por pertencerem a um único retorno, não foram tratadas como mé-
+dia de satisfação. A dificuldade com peso decimal apareceu no exemplo
+de um animal com 16,3, registrado como 16 porque o valor exato não foi
+aceito na interação descrita. O achado evidencia uma limitação percebida
+no preenchimento, sem permitir atribuir sua causa ao navegador, à versão
+do aplicativo ou à validação de um campo específico. O comentário sobre
+a quantidade de aplicação indica a necessidade de revisar a clareza e a
+pertinência dos dados do módulo de vacinação, considerando a distinção
+entre registro pelo tutor e avaliação profissional.
+R2 destacou a organização das informações e a facilidade de
+localizá-las, e considerou úteis os dados de identificação, o registro de mi-
+crochip, o planejamento de viagens e a busca de clínicas próximas. A su-
+gestão de destacar estabelecimentos 24 horas indica que a proximidade,
+12
+
+
+PÁGINA 13
+Tabela 3 - Síntese dos comentários presentes nos dois retornos
+preservados
+Aspecto
+Comentário ou sugestão registrada
+Fonte
+Identificação e pre-
+enchimento
+Dificuldade para informar o peso de 16,3; valoriza-
+ção de informações mais detalhadas sobre o ani-
+mal.
+R1
+Registro de vacinas Questionamento sobre a necessidade do campo de
+quantidade de aplicação, considerado assunto de
+análise veterinária.
+R1
+Organização e con-
+sulta
+Utilidade dos dados para preenchimento pelo tutor
+e comunicação das informações durante o atendi-
+mento; navegação descrita como fácil.
+R2
+Identificação
+por
+microchip
+Valorização do registro de microchip como informa-
+ção útil em situações de resgate.
+R2
+Planejamento de vi-
+agens
+Área descrita como completa e útil para organiza-
+ção antecipada de documentos.
+R2
+Localização de clí-
+nicas
+Utilidade da busca de estabelecimentos próximos
+e sugestão de destacar os que atendem 24 horas.
+R2
+Atuação veterinária
+Sugestão de área profissional com identificação
+pelo registro de conselho, consulta por microchip
+e registros de atendimento.
+R2
+Fonte: Elaborado pelo autor.
+isoladamente, pode ser insuficiente em situação de urgência, sem com-
+provação de redução do tempo de atendimento ou melhoria de desfechos
+clínicos. A sugestão de uma área veterinária, com consulta por microchip
+e registros de atendimento, amplia o problema para o compartilhamento de
+informações entre tutores e profissionais e exigiria investigar responsabi-
+lidades, autorização de acesso e verificação de identidade profissional; a
+menção a um número de conselho, por si só, não demonstra mecanismo
+suficiente de validação. Foi mantida como possibilidade de investigação, e
+não como funcionalidade entregue. Nesses dois retornos anteriores, não fo-
+ram identificados comentários que comprovem aceitação do funcionamento
+offline, da exportação em PDF ou de notificações de revacinação; esses
+recursos foram descritos na avaliação técnica, e sua apreciação pelos par-
+ticipantes não foi presumida.
+3.3
+AVALIAÇÕES ESTRUTURADAS REGISTRADAS EM NOVEMBRO
+DE 2026
+3.3.1
+Histórico de sugestões e alterações do aplicativo
+A versão 2, registrada em 4 de novembro, reuniu cinco envios
+de quatro contas. Após manter o envio mais recente de cada conta, res-
+13
+
+
+PÁGINA 14
+taram quatro avaliações (N1 a N4, em ordem cronológica) e 24 respostas
+às seis afirmações. Os itens perguntavam sobre necessidade de melhoria
+e utilidade de sugestões; não avaliam a execução das funções. As médias
+dos três itens de melhoria foram 2,25 para carteirinha, 1,75 para vacinas e
+1,00 para viagens; as dos itens de utilidade foram 3,00 para novos campos,
+3,75 para alertas vacinais e 3,75 para checklist por pet. Cada campo geral
+teve três notas válidas, com média 4,67; o zero de uma conta foi excluído
+desses campos.
+N1 não acrescentou comentários. N2 sugeriu avisos de venci-
+mento e organização antecipada de viagens; N3 pediu a apresentação de
+todas as vacinas vencidas; N4 propôs síntese das pendências, seleção de
+vários pets, listas individuais ou compartilhadas e itens adicionais. Três
+contas concordaram com a utilidade dos alertas e do checklist por pet, en-
+quanto uma discordou. A Tabela 4 preserva a relação entre essas solicita-
+ções e o desenvolvimento.
+Tabela 4 - Rastreabilidade entre comentários e alterações do aplicativo
+Necessidade
+rela-
+tada
+Alteração implementada
+Fonte
+Lembrar
+vencimen-
+tos
+Central de avisos de vacinas e documentos, com
+vencidos, próximos 30 dias, filtros por categoria e
+acesso ao registro.
+N2, N4
+Mostrar todas as va-
+cinas vencidas
+Listagem individual das pendências e síntese na
+carteira com quantidade, dois nomes e indicação
+das demais; ausência de registros não aparece
+como situação em dia.
+N3, N4
+Preparar futuras via-
+gens
+Documentos do pet reunidos na tela de viagem
+e avisos de viagens nos próximos 30 dias com
+checklist pendente.
+N2
+Organizar vários pets Seleção de acompanhantes no plano de viagem,
+com escolha entre listas individuais e checklist
+compartilhado para o grupo selecionado.
+N4
+Contemplar necessi-
+dades específicas
+Inclusão e remoção de itens adicionais do chec-
+klist e campo de anotações; marcações compar-
+tilhadas se propagam somente ao grupo.
+N4
+Fonte: Elaborado pelo autor.
+Os avisos são calculados ao acessar o app, conforme datas e
+registros disponíveis; não são notificações do sistema operacional com o
+aplicativo fechado. Seis testes automatizados com dados fictícios verifica-
+ram regras de datas, pendências e checklists compartilhados. Esses testes
+constituem verificação técnica, sem mensuração de satisfação ou redução
+de esquecimentos.
+14
+
+
+PÁGINA 15
+3.3.2
+Nova avaliação das funcionalidades utilizadas
+Na consulta de 7 de novembro, a base continha 22 envios: cinco
+da versão 2 e 17 da versão 3. Nesta última, os 17 envios correspondiam a
+11 contas. Foram selecionados os 11 envios mais recentes por conta, des-
+considerando seis reenvios na análise, sem apagar registros. As datas de
+envio selecionadas situam-se em 5 e 6 de novembro no horário de Brasília
+(UTC-3); a base armazena UTC. Uma conta aparece nas duas versões, re-
+forçando que os grupos não devem ser somados como pessoas distintas.
+Não se estabeleceu correspondência com os convites anteriores.
+O instrumento passou a apresentar afirmações de realização
+das tarefas: consultar a identificação na carteirinha, registrar vacina, iden-
+tificar a situação vacinal pelas datas e status, usar o checklist de viagem,
+cadastrar e editar pet, consultar documento anexado e encontrar funções
+nos menus. A escala vai de 1 (discordo totalmente) a 5 (concordo total-
+mente), com 3 como posição neutra e opção Não utilizei. As respostas
+representam percepção declarada de uso; não substituem observação di-
+reta da execução.
+As 11 avaliações selecionadas forneceram 88 respostas numéri-
+cas válidas, sem marcações de Não utilizei. A Tabela 5 apresenta cada item
+com seu próprio denominador; as frequências correspondem às 11 contas
+e não a 88 participantes. Todas as medianas foram 5.
+Tabela 5 - Avaliação funcional da versão 3, com um envio por conta
+Tarefa avaliada (enunciado resumido)
+D N
+C Média
+Consultar identificação na carteirinha
+0
+0 11
+5,00
+Registrar vacina do pet
+0
+0 11
+4,82
+Identificar situação das vacinas
+1
+0 10
+4,55
+Usar checklist de viagem
+0
+0 11
+4,82
+Cadastrar pet
+0
+0 11
+4,91
+Editar dados do pet
+0
+0 11
+5,00
+Consultar documento anexado
+0
+0 11
+4,91
+Encontrar funções nos menus
+0
+1 10
+4,73
+D: notas 1–2; N: nota 3; C: notas 4–5. Cada item: 11 respostas válidas; mediana 5.
+Fonte: Elaborado pelo autor.
+A consulta da carteirinha e a edição do pet receberam nota 5 nas
+11 contas. A situação vacinal teve a menor média (4,55): dez concordân-
+cias e uma discordância parcial (nota 2). Essa mesma conta marcou 3 em
+navegação e relatou “só alguns problemas de navegação”, em comentário
+associado à carteirinha. O relato foi classificado pelo conteúdo, sem pre-
+15
+
+
+PÁGINA 16
+sumir a tela ou a causa do problema. Outra conta registrou elogios gerais
+nos oito comentários; as nove restantes não comentaram. A ausência de
+comentário não foi interpretada como ausência de dificuldade.
+Nos campos gerais de avaliação do aplicativo e de satisfação
+com as informações da carteira, cada campo teve nove notas válidas: sete
+notas 5 e duas notas 4, com média 4,78 e mediana 5. Duas contas registra-
+ram zero nesses campos, excluído por estar fora da escala, preservando-se
+seus itens funcionais válidos. Duas das 11 avaliações não possuíam pet
+vinculado ao envio, embora declarassem uso das funções; essa ausência
+não prova falta de uso, mas limita a conferência da execução pelo registro
+de feedback.
+O conjunto indica percepções predominantemente favoráveis às
+tarefas descritas, com pontos a investigar em situação vacinal e navegação.
+Não se atribuiu severidade de Nielsen às notas nem se calculou satisfação
+global pela soma dos itens. A versão 3 não replica os enunciados da versão
+2, não avalia isoladamente todas as alterações implementadas e não docu-
+menta tarefas observadas ou condições equivalentes. Assim, não permite
+estimar ganho de usabilidade ou demonstrar que as melhorias causaram
+as notas obtidas.
+3.4
+LIMITAÇÕES E AMEAÇAS À VALIDADE
+A avaliação funcional se limitou aos cenários e ambientes des-
+critos, sem cobertura exaustiva de entradas inválidas, falhas de serviços
+externos, conflitos entre dispositivos ou perda de conexão durante o envio
+de anexos. A ausência de medidas de tempo, repetição e comparação com
+outra solução restringe conclusões sobre desempenho e facilidade de uso,
+e a observação feita no contexto de desenvolvimento pode favorecer a fami-
+liaridade com os fluxos, reduzindo a identificação de dificuldades de novos
+usuários.
+Na pesquisa de campo, a seleção por conveniência, os dois re-
+tornos preservados, a perda de um retorno e a categorização por um único
+analista limitam a comparação e introduzem possíveis vieses de seleção e
+não resposta. Na coleta funcional, 11 contas não comprovam 11 participan-
+tes independentes, e sua profissão, município e correspondência com o re-
+crutamento inicial não foram estabelecidos. Reenvios, zeros fora da escala,
+dois envios sem pet vinculado e a concentração de notas máximas exigem
+cautela. As respostas autodeclaradas não foram confrontadas com execu-
+ção observada, tempo ou sucesso em tarefas. A mudança dos enunciados
+16
+
+
+PÁGINA 17
+e a ausência de avaliação comparável das alterações impedem atribuir ga-
+nho de usabilidade ao desenvolvimento. Não foram demonstrados redução
+de papel, adesão vacinal, superioridade sobre outras soluções, autentica-
+ção de autoria da assinatura ou aceitação do PDF por terceiros.
+4
+CONCLUSÃO
+O trabalho desenvolveu a aplicação multiplataforma Registro Di-
+gital Animal para organizar e consultar identificação, vacinação e documen-
+tos clínicos de animais de estimação. O objetivo foi atendido no âmbito dos
+módulos e cenários descritos: cadastro de tutores e pets, carteira digital,
+documentos, registros vacinais e consulta em computadores e dispositivos
+móveis, com acesso a dados previamente armazenados e sincronização
+posterior.
+Os 15 cenários funcionais foram registrados como aprovados
+nas condições avaliadas. Os dois retornos anteriores indicaram utilidade
+e dificuldades de preenchimento; quatro avaliações da versão 2 orientaram
+avisos, síntese de vacinas vencidas e checklists flexíveis, acompanhados
+de testes técnicos. Na versão 3, a seleção de 11 avaliações entre 17 en-
+vios produziu 88 respostas às oito funções, com médias entre 4,55 e 5,00.
+A discordância sobre situação vacinal e o relato de navegação delimitam
+pontos para investigação. Os resultados indicam percepção favorável no
+recorte, sem demonstrar usabilidade generalizável ou melhoria causal em
+relação à versão anterior.
+A contribuição é o artefato, a rastreabilidade entre necessida-
+des e alterações e a avaliação exploratória das funções utilizadas. O al-
+cance permanece limitado pela seleção não probabilística, pela caracteri-
+zação incompleta das contas e pela ausência de observação independente
+e comparação controlada. A redução da dependência do papel permane-
+ceu como benefício pretendido, sem mensuração. A experiência reforçou
+a necessidade de preservar dados, versões e denominadores e distinguir
+verificação técnica, sugestões e percepção de uso.
+Como trabalhos futuros, propõem-se avaliações com tutores e
+veterinários de diferentes perfis, comparação do tempo de localização e da
+completude dos registros com a documentação física e acompanhamento
+longitudinal dos prazos vacinais. Também devem ser investigados conec-
+tividade intermitente, edições concorrentes, recuperação de dados e parti-
+cipação profissional, considerando autorização de acesso e confiabilidade
+das informações.
+17
+
+
+PÁGINA 18
+REFERÊNCIAS
+BOLSON, S. H.; BOLSON, S. H. A antropomorfização dos animais
+domésticos e o registro de "nascimento"e guarda em cartório como (mais)
+uma expressão da família multiespécie. Revista Vertentes do Direito, v. 9,
+n. 1, p. 367–390, 2022. Acesso em: 27 mar. 2026. Disponível em: <https:
+//www-periodicos-capes-gov-br.ez318.periodicos.capes.gov.br/index.php/
+acervo/buscador.html?task=detalhes&source=all&id=W4285096711>.
+ISKANDAR, D.; ISMAWATIE, E.; IBRAHIM, M. N. Development of a
+technology-based animal electronic medical record information system for
+animal health services. In: International Conference of Health, Science
+and Technology (ICOHETECH). [S.l.: s.n.], 2023.
+MORAES, I. T. et al. Uso de aplicativos e softwares para práticas clínicas
+e educacionais na medicina veterinária: uma revisão integrativa. Revista
+Caderno Pedagógico, v. 21, n. 5, p. 1–19, 2024. Acesso em: 23 abr.
+2026. Disponível em: <https://ojs.studiespublicacoes.com.br/ojs/index.php/
+cadped/article/view/4169/3076>.
+MOUTINHO, F. F. B. et al. Fatores determinantes e condicionantes
+para a ocorrência de raiva em niterói, rj, brasil. Hygeia - Revista
+Brasileira de Geografia Médica e da Saúde, v. 14, n. 29, p.
+54–64, 2018. Acesso em: 26 mar. 2026. Disponível em: <https:
+//seer.ufu.br/index.php/hygeia/article/view/42671/24194>.
+MURPHY, R. G. L. et al. Animal identification systems in north america.
+The Professional Animal Scientist, 2008.
+NIELSEN, J. Severity Ratings for Usability Problems. 1994. Acesso
+em: 28 out. 2026. Disponível em: <https://www.nngroup.com/articles/
+how-to-rate-the-severity-of-usability-problems/>.
+PEFFERS, K. et al. A design science research methodology for information
+systems research. Journal of Management Information Systems,
+v. 24, n. 3, p. 45–77, 2007. Acesso em: 28 out. 2026. Disponível em:
+<https://doi.org/10.2753/MIS0742-1222240302>.
+SARTORI, H. N.; MEDEIROS, M. T. PetID: Protótipo de um aplicativo
+para identificação de animais utilizando NFC. 2018. Trabalho de
+Conclusão de Curso, Universidade Federal de Santa Catarina.
+VIDAL, M. et al. Perspectives on individual animal identification from biology
+and computer vision. Integrative and Comparative Biology, 2021.
+VIEIRA, T. R.; MOSSOI, A. C. Direito à saúde, animais domésticos e o
+bem-estar da família multiespécie. Revista de Biodireito e Direito dos
+Animais, v. 6, n. 2, p. 56–78, 2020. Acesso em: 26 mar. 2026. Disponível
+em: <https://www.indexlaw.org/index.php/revistarbda/article/view/7012/
+pdf>.
+18
+
+
+PÁGINA 19
+VIEIRA, V. M. M. et al. Development of a web system for pet care
+and adoption management: The case of the petcare platform. Revista
+Ibero-Americana de Humanidades, Ciências e Educação, v. 11, n. 12,
+2025.
+ZHAO, J. et al. Technologies in individual animal identification and meat
+products traceability. Biotechnology & Biotechnological Equipment,
+2020.
+19

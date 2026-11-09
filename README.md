@@ -20,7 +20,19 @@ PetIdentification/
   package.json
   README.md
 ```
+## Link do GitHub:
 
+```
+https://github.com/Gabriel-GDS-dev/PetIdentification
+```
+
+## Link do Vercel:
+
+```
+pet-identification-xi.vercel.app
+```
+
+# Testes Locais:
 ## Instalar e preparar
 
 Na raiz do projeto:

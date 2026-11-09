@@ -1,0 +1,135 @@
+%==========================================================================
+% Exemplo de artigo cientifico UNESC
+%
+% v0.0 versão em 20/09/2023 por Marlon Oliveira
+% v1.0 versão em 25/06/2025 por Marlon Oliveira
+
+
+%==========================================================================
+
+%==========================================================================
+% Pacotes utilizados pela UNESC - não delete as linhas abaixo
+%==========================================================================
+\documentclass{UNESC}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}%\usepackage[latin1]{inputenc}
+\renewcommand{\rmdefault}{phv} % Arial
+\renewcommand{\sfdefault}{phv} % Arial
+\usepackage[brazilian]{babel}
+\usepackage{graphicx}
+%\usepackage{subfigure}
+\usepackage{hyperref}
+\usepackage{quoting}
+\usepackage[labelsep=none]{caption}
+\DeclareCaptionLabelFormat{figuracomtraco}{#1~#2 -}
+\captionsetup[figure]{labelformat=figuracomtraco, labelsep=space}
+\captionsetup[table]{labelformat=simple, labelsep=space, textformat=simple}
+\DeclareCaptionLabelFormat{tabelacomtraco}{#1~#2 -}
+\captionsetup[table]{labelformat=tabelacomtraco}
+\captionsetup{labelsep=none}
+%\renewcommand{\thefigure}{\arabic{figure} - }
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{comment}
+\usepackage[hang,flushmargin]{footmisc}
+\usepackage{array}
+
+\hypersetup{
+  setpagesize  = false,
+  colorlinks   = true,    % Colours links instead of ugly boxes
+  urlcolor     = blue,    % Colour for external hyperlinks
+  linkcolor    = black,   % Colour of internal links
+  citecolor    = black    % Colour of citations
+}
+\urlstyle{same}
+\usepackage{setspace}
+
+\usepackage[alf,recuo=0.0cm,abnt-emphasize=bf]{abntex2cite} 
+
+%\captionsetup[figure]{justification=raggedright}
+
+
+%==========================================================================
+% Dados do artigo: título, autores e filiação
+%==========================================================================
+\title{REGISTRO DIGITAL ANIMAL: DIGITALIZANDO A IDENTIFICAÇÃO E CONTROLE DE VACINAÇÃO DE ANIMAIS DE ESTIMAÇÃO}
+\author
+{
+   Gabriel Goulart de Souza\footnote{Curso de Ciência da Computação, Universidade do Extremo Sul Catarinense (Unesc), Criciúma - Santa Catarina - Brasil. gabriel.gsouzza6@unesc.net},
+   Diorgines Mattos Machado\footnote{Corientador(a), Curso de Ciência da Computação, Universidade do Extremo Sul Catarinense (Unesc), Criciúma - Santa Catarina - Brasil. diorginesmattos@unesc.net},
+   Allan Farias Favaro\footnote{Orientador(a), Curso de Ciência da Computação, Universidade do Extremo Sul Catarinense (Unesc), Criciúma - Santa Catarina - Brasil. allanfavaro@gmail.com}
+}
+%==========================================================================
+% Início do texto do artigo
+%==========================================================================
+\begin{document}
+
+\onehalfspacing
+
+\maketitle
+
+
+\section{INTRODUÇÃO}
+
+A relação entre humanos e animais de estimação apresenta mudanças significativas nas últimas décadas, consolidando o conceito de família multiespécie, no qual o animal ocupa uma posição relevante no núcleo familiar \cite{BOLSON2022}. A valorização desse vínculo amplia a demanda por cuidados contínuos com a saúde e o bem-estar animal, ao mesmo tempo em que incentiva o desenvolvimento de soluções tecnológicas voltadas ao acompanhamento clínico e à organização das informações relacionadas aos pets. A presença dos animais nesse contexto reforça a necessidade de mecanismos que assegurem o controle adequado das condições de saúde \cite{MORAES2024}.
+
+O controle das informações da saúde animal ainda ocorre, em muitos casos, por meio de registros físicos, os quais apresentam limitações relacionadas à conservação, ao acesso e à atualização dos dados. A utilização de cadernetas em papel favorece perdas, danos e dificuldades na consulta do histórico vacinal, especialmente em situações que exigem comprovação imediata. A dependência desse formato compromete a continuidade do acompanhamento e limita a disponibilidade das informações em diferentes contextos de uso \cite{BOLSON2022}. A digitalização de registros surge como alternativa para reduzir tais limitações, permitindo o armazenamento estruturado e o acesso facilitado aos dados de saúde. A adoção de soluções digitais amplia a disponibilidade das informações, possibilita atualização em tempo adequado e contribui para a organização do histórico clínico dos animais. A utilização de dispositivos móveis nesse processo favorece o acesso em diferentes ambientes, alinhando-se às práticas contemporâneas de gestão de dados em saúde \cite{VIEIRA2020}.
+
+A aplicação de tecnologias já consolidadas em contextos humanos, como o registro digital de vacinação, evidencia benefícios relacionados à acessibilidade e à organização das informações. A adaptação dessa abordagem ao contexto da saúde animal permite ampliar o controle sobre os dados vacinais e de identificação, contribuindo para a redução da dependência de documentos físicos. A implementação de soluções digitais nesse cenário favorece a integração entre tecnologia e cuidado animal \cite{MARTINS2024}.
+
+Diante disto, a proposta deste estudo consiste no desenvolvimento de uma aplicação multiplataforma voltada ao registro digital de vacinação e à identificação animal. A solução busca estruturar o armazenamento das informações, facilitar o acesso aos dados e reduzir limitações associadas ao uso de registros físicos. A construção do sistema considera a necessidade de disponibilidade das informações, a organização dos dados e a adequação às demandas contemporâneas de gestão da saúde animal.
+
+\subsection{Objetivo Geral}
+
+Avaliar a aplicação de um sistema de registro digital de vacinação e identificação, para redução da dependência de papéis de registros físicos e acesso às informações de saúde dos animais.
+
+\subsection{Objetivos Específicos}
+ 
+Para transformar a gestão da saúde pet em uma ferramenta prática e eficiente, os objetivos específicos deste projeto são:
+\begin{itemize}
+    \item Desenvolver um aplicativo multiplataforma para a criação de um registro digital de vacinação e identificação de animais;
+    \item Projetar uma interface (UI) focada na experiência do usuário (UX), garantindo agilidade na visualização dos dados;
+    \item Modelar e implementar um banco de dados para armazenamento persistente de vacinas, exames e contatos de emergência;
+    \item Mapear os requisitos técnicos e os dados obrigatórios das carteiras de vacinação oficiais para a transposição digital;
+    \item Implementar mecanismos de cache para garantir o acesso às informações essenciais, mesmo em ambientes sem conectividade.
+\end{itemize}
+
+\subsection{Justificativa}
+
+O problema é muito real e o mercado pet não para de crescer, hoje, os animais são tratados como membros da família \cite{BOLSON2022}, e manter a vacinação em dia é, acima de tudo, uma questão de saúde pública, já que a vacinação é a única forma de controlar doenças graves que passam do animal para o homem, como a raiva \cite{MOUTINHO2017}. O problema é que, enquanto as leis e a sociedade já mudaram para proteger esse carinho que temos pelos pets, as ferramentas que usamos no dia a dia continuam presas ao papel \cite{MARTINS2024}.
+
+Essa modernização é um caminho sem volta na medicina veterinária \cite{MORAES2024}. Trocar o papel pelo digital traz vantagens: os dados não estragam, você tem tudo no bolso o tempo todo e consegue atualizar as informações em tempo real. Além disso, ter tudo no celular deixa o dono preparado para qualquer susto ou emergência, garantindo que o histórico de saúde do animal esteja a um toque de distância \cite{RODRIGUES2022}.
+
+Neste sentido, este projeto consiste na aplicação de conceitos de desenvolvimento mobile e modelagem de dados para a solução de um problema recorrente no cotidiano relacionado à gestão de informações de saúde animal. A implementação da aplicação ultrapassa a função de uso pontual, passando a atuar como um recurso digital estruturado para registro e organização dos dados. A substituição dos registros físicos por uma solução tecnológica contribui para a melhoria no acesso, na atualização e na disponibilidade das informações, alinhando-se às demandas contemporâneas de uso de tecnologias digitais.
+
+
+%-----------------------------------------------
+% Comentar para o Projeto em diante.
+%-----------------------------------------------
+\section{\small ASSINATURAS E TERMO DE ORIENTAÇÃO}
+%-----------------------------------------------
+
+\noindent\begin{tabular}{ | m{25em}  | m{2.5cm} | } 
+  \hline
+  ALUNO: &DATA: \\
+  & \\ 
+  & \\ 
+  \hline
+  PROFESSOR ORIENTADOR:&DATA:  \\
+  & \\ 
+  & \\ 
+  \hline
+  PROFESSOR CO-ORIENTADOR: &DATA:\\
+  & \\ 
+  & \\ 
+  \hline
+\end{tabular}
+
+
+\bibliographystyle{abntex2-unesc}
+\renewcommand{\refname}{REFERÊNCIAS}
+\bibliography{referencias} % arquivo referencias.bib que contém as referências bibliográficas utilizadas no artigo
+
+
+\end{document} 
+

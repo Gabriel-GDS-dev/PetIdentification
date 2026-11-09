@@ -1,0 +1,14 @@
+{
+  "paginas_pdf_completo": 17,
+  "revisao_visual": "Todas as páginas renderizadas; sem páginas exclusivas de figura, cortes ou sobreposições observados",
+  "warning_caption": 1,
+  "ordem_url_acesso_verificada": true,
+  "underfull": 1,
+  "tabelas_padronizadas": 5,
+  "erros_overleaf": 0,
+  "fontes_alinhadas": true,
+  "limite": 20,
+  "inclui_referencias": true,
+  "bst": "abntex2-unesc.bst",
+  "figuras_vetoriais": 3
+}
